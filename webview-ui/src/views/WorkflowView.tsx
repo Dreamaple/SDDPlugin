@@ -55,7 +55,22 @@ export function WorkflowView(props: {
               {canDispatch ? (
                 <button
                   className="spk-btn primary"
-                  onClick={() => postToHost({ type: 'dispatchStage', stageId: stage.id })}
+                  onClick={() => {
+                    // implement 防误触：任务清单未全部完成时需确认（contracts/dispatch.md §3）
+                    if (
+                      stage.id === 'implement' &&
+                      stage.taskStats &&
+                      stage.taskStats.done < stage.taskStats.total
+                    ) {
+                      const ok = window.confirm(
+                        `任务清单尚未全部完成（${stage.taskStats.done}/${stage.taskStats.total}），确认运行 ${stage.commandToken}？`,
+                      );
+                      if (!ok) {
+                        return;
+                      }
+                    }
+                    postToHost({ type: 'dispatchStage', stageId: stage.id });
+                  }}
                   title={`触发 ${stage.commandToken}`}
                 >
                   下一步：运行 {stage.commandToken}

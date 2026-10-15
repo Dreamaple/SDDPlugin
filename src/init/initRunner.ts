@@ -122,7 +122,10 @@ export class InitRunner {
       args.push('--force');
     }
     args.push('--non-interactive');
-    await this.runCliOperation('init', options.integrationId, args, options.integrationId);
+    await this.runCliOperation('init', options.integrationId, args, options.integrationId, {
+      action: 'startInit',
+      options,
+    });
   }
 
   /** T025 switchIntegration 编排 */
@@ -141,7 +144,11 @@ export class InitRunner {
     if (force) {
       args.push('--force');
     }
-    await this.runCliOperation('integration-install', integrationId, args, integrationId);
+    await this.runCliOperation('integration-install', integrationId, args, integrationId, {
+      action: 'switchIntegration',
+      integrationId,
+      force,
+    });
   }
 
   private baseProgress(operation: Progress['operation'], label: string): Progress {
@@ -159,6 +166,7 @@ export class InitRunner {
     integrationId: string,
     args: string[],
     verifyIntegration: string,
+    retry: { action: 'startInit'; options: InitOptions } | { action: 'switchIntegration'; integrationId: string; force: boolean },
   ): Promise<void> {
     if (this.handle) {
       this.deps.onError({
@@ -220,7 +228,12 @@ export class InitRunner {
         result: { outcome: 'failure', message: '操作失败，可重试' },
       };
       this.deps.onProgress(progress);
-      this.deps.onError(this.mapCliFailure(result.stderrTail, operation, integrationId));
+      const mapped = this.mapCliFailure(result.stderrTail, operation, integrationId);
+      this.deps.onError({
+        ...mapped,
+        // 上下文驱动重试：ErrorSurface 依据 action 重放原操作（contracts/webview-protocol.md）
+        context: { ...mapped.context, action: retry.action, ...(retry as object) },
+      });
       this.deps.onDone();
       return;
     }

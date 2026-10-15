@@ -1,0 +1,25 @@
+# T058 补充：vsce 打包瘦身（vsix 仅含运行时产物）
+.vscode/**
+src/**
+shared/**
+tests/**
+specs/**
+input/**
+.vscode-test/**
+esbuild.js
+eslint.config.mjs
+vitest.config.ts
+tsconfig.json
+npm-install.log
+**/*.log
+**/*.map
+.gitignore
+.gitattributes
+.prettierrc
+.prettierignore
+.cursor/**
+.specify/**
+webview-ui/src/**
+webview-ui/index.html
+webview-ui/vite.config.ts
+webview-ui/tsconfig.json

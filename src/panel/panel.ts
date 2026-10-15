@@ -76,6 +76,12 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((msg: WebviewToHost) => {
       void this.handleMessage(msg);
     });
+    // 面板重新可见时推送最新快照（retainContextWhenHidden 下状态可能过期）
+    view.onDidChangeVisibility(() => {
+      if (view.visible) {
+        void this.refresh();
+      }
+    });
     view.onDidDispose(() => {
       this.view = undefined;
     });

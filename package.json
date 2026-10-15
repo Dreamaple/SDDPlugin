@@ -46,9 +46,19 @@
       },
       {
         "command": "speckitGui.refresh",
-        "title": "Speckit: 刷新状态"
+        "title": "Speckit: 刷新状态",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "speckitGui.refresh",
+          "group": "navigation",
+          "when": "view == speckitGui.panel"
+        }
+      ]
+    },
     "configuration": {
       "title": "Speckit GUI",
       "properties": {

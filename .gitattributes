@@ -1,0 +1,7 @@
+# 换行规范化：仓库内统一 LF，Windows 批处理/PowerShell 保持 CRLF
+* text=auto
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf
+*.svg text
+*.vsix binary

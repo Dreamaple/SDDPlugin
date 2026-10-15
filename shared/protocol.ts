@@ -19,10 +19,10 @@ export interface WorkspaceEnvironment {
   aiSkills?: boolean;
   /** specify CLI 是否可发现（contracts/cli.md §1 解析链） */
   cliAvailable: boolean;
-  /** specify CLI 版本（--version 解析；仅 cliAvailable 时有值） */
+  /** 调用来源（v0.4.0：bundled=内置源码直跑 / setting=设置显式路径 / path=PATH CLI / none） */
+  cliSource?: 'bundled' | 'setting' | 'path' | 'none';
+  /** specify CLI 版本（bundled → pyproject；direct → --version 解析；仅 cliAvailable 时有值） */
   cliVersion?: string;
-  /** 当前 CLI 是否支持自升级（specify upgrade 子命令；旧版 0.x 无此命令） */
-  cliUpgradeSupported?: boolean;
   /** incomplete 时的具体缺失说明 */
   hints: string[];
 }
@@ -98,6 +98,8 @@ export interface Progress {
   running: boolean;
   kind: 'determinate' | 'indeterminate';
   label: string;
+  /** 下载/计算比例 0..1（determinate 且已知总量时提供） */
+  ratio?: number;
   /** CLI 最近输出行（环形，≤10 行） */
   logTail: string[];
   taskStats?: { done: number; total: number };
@@ -193,5 +195,5 @@ export type WebviewToHost =
   | { type: 'confirmReview'; gateId: GateId }
   | { type: 'answerClarification'; id: string; answer: string }
   | { type: 'cancelOperation' }
-  | { type: 'upgradeSpeckit' }
+  | { type: 'updateBundledSpeckit' } // v0.4.0：从 GitHub Release 刷新内置 Spec Kit 源码
   | { type: 'openLogs' };

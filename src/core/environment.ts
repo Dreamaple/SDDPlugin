@@ -8,10 +8,10 @@ export interface DetectOptions {
   cliAvailable: boolean;
   /** 工具目录 label 查询（命中 → 已知集成；未命中 → 未知/自定义） */
   labelFor?: (integrationId: string) => string | undefined;
-  /** CLI 版本（--version 解析结果） */
+  /** CLI 版本（bundled → pyproject；direct → --version 解析） */
   cliVersion?: string;
-  /** 当前 CLI 是否支持自升级 */
-  cliUpgradeSupported?: boolean;
+  /** 调用来源（v0.4.0） */
+  cliSource?: 'bundled' | 'setting' | 'path' | 'none';
 }
 
 function normalizeScript(raw: unknown): ScriptType | undefined {
@@ -32,7 +32,7 @@ export async function detectEnvironment(
       isKnownIntegration: false,
       cliAvailable,
       cliVersion: opts.cliVersion,
-      cliUpgradeSupported: opts.cliUpgradeSupported,
+      cliSource: opts.cliSource,
       hints: [],
     };
   }
@@ -67,7 +67,7 @@ export async function detectEnvironment(
           aiSkills: parsed.ai_skills === true,
           cliAvailable,
           cliVersion: opts.cliVersion,
-          cliUpgradeSupported: opts.cliUpgradeSupported,
+          cliSource: opts.cliSource,
           hints: [],
         };
       }
@@ -90,7 +90,7 @@ export async function detectEnvironment(
     isKnownIntegration: false,
     cliAvailable,
     cliVersion: opts.cliVersion,
-    cliUpgradeSupported: opts.cliUpgradeSupported,
+    cliSource: opts.cliSource,
     hints,
   };
 }

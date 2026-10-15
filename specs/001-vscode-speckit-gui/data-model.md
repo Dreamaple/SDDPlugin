@@ -16,8 +16,8 @@
 | `isKnownIntegration` | `boolean` | `ai` 是否命中内置目录 |
 | `script` | `"sh" \| "ps" \| "py" \| undefined` | 脚本类型 |
 | `speckitVersion` | `string \| undefined` | init-options.json `speckit_version` |
-| `cliVersion` | `string \| undefined` | specify CLI 版本（`--version` 解析，v0.3.0） |
-| `cliUpgradeSupported` | `boolean \| undefined` | CLI 是否支持 `specify upgrade`（v0.3.0） |
+| `cliVersion` | `string \| undefined` | 使用中源的版本（bundled → pyproject；direct → `--version`，v0.4.0） |
+| `cliSource` | `'bundled' \| 'setting' \| 'path' \| 'none' \| undefined` | 调用来源（v0.4.0） |
 | `cliAvailable` | `boolean` | `specify` CLI 是否可发现（R12 解析链） |
 | `hints` | `string[]` | `incomplete` 时的具体缺失说明（如"init-options.json 缺失或损坏"） |
 

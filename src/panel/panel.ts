@@ -43,6 +43,7 @@ interface ProviderDeps {
   store: UiStateStore;
   output: vscode.OutputChannel;
   extensionUri: vscode.Uri;
+  globalStorageUri: vscode.Uri;
   onSnapshot?: (snapshot: Snapshot) => void;
 }
 
@@ -116,6 +117,10 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
         getRoot: () => this.deps.rootUri?.fsPath ?? '',
         catalog,
         output: this.deps.output,
+        builtinSrcDir: () =>
+          vscode.Uri.joinPath(this.deps.extensionUri, 'resources', 'speckit-cli').fsPath,
+        bundleStorageDir: () =>
+          vscode.Uri.joinPath(this.deps.globalStorageUri, 'speckit-bundles').fsPath,
         onProgress: (p) => {
           void this.post({ type: 'progressUpdated', progress: p });
           if (p.result) {
@@ -169,24 +174,27 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
     const catalog = await this.ensureCatalog();
 
     const runner = await this.ensureRunner();
-    const cli = await runner.ensureCli({ silent: true }).catch(() => undefined);
-    const cliAvailable = !multiRootBlocked && cli !== undefined;
-    const [cliVersion, cliUpgradeSupported] = multiRootBlocked
-      ? [undefined, undefined]
-      : await Promise.all([runner.getVersion().catch(() => undefined), runner.detectUpgradeSupport().catch(() => false)]);
+    const [invSource, cliVersion] = multiRootBlocked
+      ? ['none' as const, undefined]
+      : await Promise.all([
+          runner.currentSource(),
+          runner.getVersion().catch(() => undefined),
+        ]);
+    const cliAvailable = invSource !== 'none';
 
     const environment = multiRootBlocked
       ? {
           state: 'missing' as const,
           isKnownIntegration: false,
           cliAvailable: false,
+          cliSource: 'none' as const,
           hints: ['工作区非单根，v1 不支持 multi-root'],
         }
       : await detectEnvironment(root, {
           cliAvailable,
-          labelFor: catalog.labelFor,
           cliVersion,
-          cliUpgradeSupported,
+          cliSource: invSource,
+          labelFor: catalog.labelFor,
         });
 
     const features = multiRootBlocked ? [] : await scanFeatures(root);
@@ -310,8 +318,8 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
       case 'cancelOperation':
         this.runner?.cancel();
         break;
-      case 'upgradeSpeckit':
-        await this.handleUpgrade();
+      case 'updateBundledSpeckit':
+        await this.handleUpdateBundled();
         break;
       case 'openLogs':
         this.deps.output.show();
@@ -405,27 +413,10 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
 
   // ---------- selectFeature（US2） ----------
 
-  /** 升级 Spec Kit CLI（v0.3.0：版本感知——旧版 CLI 无 upgrade 命令时给出手动指引） */
-  private async handleUpgrade(): Promise<void> {
-    if (this.deps.rootUri === undefined) {
-      await this.postWorkspaceMissing();
-      return;
-    }
+  /** 更新内置 Spec Kit（v0.4.0：GitHub Release 刷新内置源码；版本感知降级已由 runner 处理） */
+  private async handleUpdateBundled(): Promise<void> {
     const runner = await this.ensureRunner();
-    const cli = await runner.ensureCli({ silent: true }).catch(() => undefined);
-    if (!cli) {
-      await this.post({
-        type: 'errorRaised',
-        error: {
-          code: 'cli-not-found',
-          message: '未找到 specify CLI，无法升级',
-          suggestion: '请先安装 specify CLI（见安装指引）',
-          canRetry: true,
-        },
-      });
-      return;
-    }
-    await runner.upgradeSpeckit();
+    await runner.updateBundledSpeckit();
     await this.refresh();
   }
 

@@ -2,14 +2,18 @@
 
 **Feature**: `001-vscode-speckit-gui` | **Date**: 2026-10-15 | **Source**: research.md R3/R12 + `input/spec-kit-main`（specify-cli 1.2.1.dev0）
 
-## 1. 可执行发现（解析顺序）
+## 1. 调用来源解析（v0.4.0：内置源码直跑为推荐路径）
 
-1. 设置 `speckitGui.specifyCliPath`（文件路径，非空时直接使用，存在性校验失败 → `cli-not-found`）
-2. PATH 上的 `specify`（Windows 需同时尝试 `specify.cmd` / `specify.exe`，经 `which`/`where` 语义探测）
-3. 均不可用 → 环境面板进入"需要安装"态：`errorRaised(cli-not-found, suggestion=安装指引)`，安装指引文案：
-   `uvx --from git+https://github.com/github/spec-kit.git specify --help` 或 `pipx install specify-cli` 或 `pip install specify-cli`，并附"重新检测"按钮
+1. 设置 `speckitGui.specifyCliPath`（文件路径，非空且存在 → **直跑模式**，兼容旧流程/测试桩）
+2. **内置源码 + uv**（推荐）：插件自带 specify-cli 源码副本（`resources/speckit-cli`，含 pyproject/src/templates/scripts/workflows/bundles/extensions），若已下载更新的 Release 副本（globalStorage/speckit-bundles/<tag>）则优先副本（版本比较取最新）；uvx 可发现 → `uvx --from <源码目录> specify ...`（bundled 模式）
+3. PATH 上的 `specify`（兜底直跑，Windows 需同时尝试 `specify.cmd` / `specify.exe`）
+4. 均不可用 → `errorRaised(cli-not-found)`：有内置源但缺 uv → uv 安装指引；全缺 → uv + specify CLI 双指引，附"重新检测"按钮
 
-要求：Python ≥ 3.11 由 CLI 自身声明；插件不校验 Python，只校验 CLI 可执行与调用退出码。v1 **不自动安装**。
+- bundled 模式首次运行 uvx 会构建隔离环境（从 PyPI 拉依赖并缓存，需网络；此后走缓存秒级）
+- bundled 模式能力 = 全旗标（1.2.x 源码），免 `--help` 探测；direct 模式继续能力探测（parseInitCapabilities）
+- 版本显示：bundled → 内置副本 pyproject `version`；direct → `specify --version` 解析
+
+要求：Python ≥ 3.11 由 CLI 自身声明；插件不校验 Python，只校验 uv/CLI 可执行与调用退出码。v1 不自动安装 uv。
 
 ## 2. 调用契约
 
@@ -38,14 +42,16 @@ specify integration install <integrationId> [--script <ps|sh|py>] [--force]
 - `--script` 省略时由 CLI 依 init-options.json / 平台默认；切换前宿主展示当前环境与影响提示（FR-004 二次确认）
 - 成功后同 init 的回读校验
 
-### upgrade（升级 Spec Kit CLI，v0.3.0）
+### 更新内置 Spec Kit（v0.4.0，替代 v0.3.0 的 specify upgrade 流程）
 ```text
-specify upgrade
+GET https://api.github.com/repos/github/spec-kit/releases/latest     # 解析最新 tag
+GET https://codeload.github.com/github/spec-kit/zip/refs/tags/<tag>  # 整仓源码 zip
 ```
-- 版本感知：先运行 `specify upgrade --help` 探测——exit 0 → 支持自升级；"No such command"（旧版 0.x）→ 不运行，回报 UPGRADE_GUIDANCE（uv tool upgrade / pipx upgrade / pip -U / git 重装指引）
-- 需要网络（解析 GitHub Releases 最新稳定版）；bare 调用立即执行、无确认提示
-- **升级中不可取消**（安装器中断有风险），进度仅作展示
-- 成功后宿主 refresh → 重新读取 `specify --version` 与环境
+- 下载进度为 determinate（ratio 0..1，可取消）；解压阶段不可取消
+- zip-slip 防护：解压前逐条目校验解析路径位于目标目录内
+- 解压目标：globalStorage/speckit-bundles/<tag>/（整仓快照，pyproject 在根，force-include 路径齐备）
+- 校验：pyproject 存在且 version 可解析；成功后 invalidateCli → 下次调用走新副本
+- 旧版 `specify upgrade` 流程废弃（机器 CLI 版本不再参与初始化）
 
 ### check / --version（环境诊断）
 ```text

@@ -44,6 +44,25 @@ export function findSpecifyInPath(pathEnv: string, platform: string): string | u
   return undefined;
 }
 
+/** PATH 语义查找可执行文件（uvx 等复用；win32 探测 .exe/.cmd/.bat 与裸名） */
+export function findExeInPath(name: string, pathEnv: string, platform: string): string | undefined {
+  const dirs = pathEnv.split(path.delimiter).filter((d) => d.length > 0);
+  const exts = platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const candidate = path.join(dir, `${name}${ext}`);
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          return candidate;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return undefined;
+}
+
 function killTree(child: ChildProcess): void {
   if (child.pid === undefined) {
     return;

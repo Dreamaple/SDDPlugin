@@ -110,9 +110,9 @@
 { type: "cancelOperation" }    // 取消当前 cancellable 的 Progress
 ```
 
-### `upgradeSpeckit`（v0.3.0）
+### `updateBundledSpeckit`（v0.4.0）
 ```ts
-{ type: "upgradeSpeckit" }    // 升级 Spec Kit CLI；宿主做版本感知（旧版 0.x 无 upgrade 命令 → 回报手动升级指引）
+{ type: "updateBundledSpeckit" }    // 从 github/spec-kit 最新 Release 刷新内置 Spec Kit 源码（替代 v0.3.0 的 specify upgrade）
 ```
 
 ## 交互时序（关键）

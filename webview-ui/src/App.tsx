@@ -81,13 +81,13 @@ export function App() {
     <button
       className="spk-btn secondary"
       title={
-        environment.cliUpgradeSupported
-          ? `升级 specify CLI（当前 ${environment.cliVersion ?? '未知版本'}；需访问 GitHub Releases）`
-          : `当前 CLI ${environment.cliVersion ?? ''} 较旧、不支持自升级，点击查看手动升级指引`
+        environment.cliSource === 'bundled'
+          ? `从 github/spec-kit 最新 Release 下载源码刷新内置副本（当前内置 v${environment.cliVersion ?? '?'}）`
+          : '更新内置 Spec Kit 源码（更新后初始化不再依赖机器上的 CLI 版本）'
       }
-      onClick={() => postToHost({ type: 'upgradeSpeckit' })}
+      onClick={() => postToHost({ type: 'updateBundledSpeckit' })}
     >
-      升级 Spec Kit{environment.cliVersion ? `（${environment.cliVersion}）` : ''}
+      更新内置 Spec Kit{environment.cliSource === 'bundled' && environment.cliVersion ? `（${environment.cliVersion}）` : ''}
     </button>
   ) : null;
 
@@ -99,6 +99,9 @@ export function App() {
           environment.script ? `脚本 ${environment.script}` : undefined,
           environment.speckitVersion ? `Spec Kit ${environment.speckitVersion}` : undefined,
           environment.aiSkills ? 'skills 模式' : undefined,
+          environment.cliVersion
+            ? `${environment.cliSource === 'bundled' ? '内置' : 'CLI'} ${environment.cliVersion}`
+            : undefined,
         ]
           .filter(Boolean)
           .join(' · ')

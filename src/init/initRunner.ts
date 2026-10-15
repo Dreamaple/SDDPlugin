@@ -1,9 +1,11 @@
-// T025: 初始化/切换/升级编排（contracts/cli.md §1/§2/§3）
-// - CLI 发现链：设置 speckitGui.specifyCliPath → PATH → 「需要安装」态
-// - init: specify init --here --integration <id> --script <ps|sh|py> [--force] --non-interactive（+高级选项）
-// - switch: specify integration install <id> [--force]
-// - upgrade: specify upgrade（旧版 0.x 无此命令 → 降级为手动指引）
-// - 成功后回读 init-options.json 校验 ai 一致；错误友好映射
+// T025: 初始化/切换/内置源更新编排（contracts/cli.md §1/§2/§3）
+// v0.4.0 架构：**内置 CLI 源码直跑**——插件自带 specify-cli 源码副本（resources/speckit-cli），
+// 经 `uvx --from <内置源码> specify ...` 执行，不再依赖机器上的 specify CLI 版本。
+// 调用来源解析链（contracts/cli.md §1）：
+//   1. 设置 speckitGui.specifyCliPath（显式直跑，兼容旧流程/测试桩）
+//   2. 内置源码 + uv（uvx --from；推荐路径，版本由插件内置/已下载副本决定）
+//   3. PATH 上的 specify（兜底直跑）
+// 「更新内置 Spec Kit」= 从 github/spec-kit 最新 Release 下载源码刷新内置副本（bundle.ts）。
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -11,7 +13,11 @@ import type { FriendlyError, InitOptions, Progress } from '../../shared/protocol
 import { idleProgress } from '../../shared/protocol';
 import type { ToolCatalog } from '../core/toolCatalog';
 import {
-  detectUpgradeSupportViaRun,
+  downloadLatestSpeckitBundle,
+  resolveBundledSource,
+} from './bundle';
+import {
+  findExeInPath,
   findSpecifyInPath,
   FULL_INIT_CAPS,
   parseInitCapabilities,
@@ -22,26 +28,40 @@ import {
 } from './cli';
 
 export const INSTALL_GUIDANCE =
-  'uvx --from git+https://github.com/github/spec-kit.git specify --help  ' +
-  '或  pipx install specify-cli  或  pip install specify-cli';
-
-export const UPGRADE_GUIDANCE =
-  '当前 CLI 版本较旧，不支持自升级（specify upgrade）。请手动升级：' +
-  'uv tool upgrade specify-cli  或  pipx upgrade specify-cli  或  pip install -U specify-cli  ' +
-  '（git 安装方式：uv tool install --force --from git+https://github.com/github/spec-kit.git specify-cli）';
+  '初始化需要 uv（用于直跑插件内置的 Spec Kit 源码）：' +
+  'powershell -c "irm https://astral.sh/uv/install.ps1 | iex" 或 pip install uv；' +
+  '或安装独立 specify CLI：pipx install specify-cli / pip install specify-cli';
 
 export interface RunnerDeps {
   getRoot(): string;
   catalog: ToolCatalog;
   output: vscode.OutputChannel;
+  /** 插件自带的内置源码目录（resources/speckit-cli） */
+  builtinSrcDir(): string;
+  /** 已下载 release 副本存放目录（globalStorage/speckit-bundles） */
+  bundleStorageDir(): string;
+  /** PATH specify 兜底开关（默认 true；测试传 false 隔离真实 PATH） */
+  allowPathFallback?: boolean;
   onProgress(progress: Progress): void;
   onDone(): void;
   onError(error: FriendlyError): void;
 }
 
+export type InvocationSource = 'bundled' | 'setting' | 'path' | 'none';
+
+interface Invocation {
+  source: 'bundled' | 'setting' | 'path';
+  cmd: string;
+  /** direct 模式：[]；bundled 模式：['--from', srcDir, 'specify'] */
+  argvPrefix: string[];
+  srcDir?: string;
+  version?: string;
+}
+
 interface ProgressRing {
   label: string;
   logTail: string[];
+  ratio?: number;
 }
 
 const RING_MAX = 10;
@@ -118,108 +138,118 @@ export function checkCapabilities(o: InitOptions, caps: InitCapabilities): strin
 
 export class InitRunner {
   private handle: CliRunHandle | undefined;
-  private cliChecked = false;
-  private cliCmd: string | undefined;
+  private invocation: Invocation | undefined;
+  private invocationResolved = false;
   private versionChecked = false;
-  private cliVersion: string | undefined;
-  private upgradeSupportChecked = false;
-  private upgradeSupported = false;
   private capsChecked = false;
   private caps: InitCapabilities | undefined;
   private cancelled = false;
+  private downloadAbort: AbortController | undefined;
 
   constructor(private readonly deps: RunnerDeps) {}
 
-  /** 设置驱动的 CLI 路径 */
+  /** 设置驱动的 CLI 路径（直跑模式） */
   private configuredPath(): string {
     return vscode.workspace.getConfiguration('speckitGui').get<string>('specifyCliPath', '');
   }
 
-  /** contracts/cli.md §1 发现链；不可用时回报 cli-not-found（silent=true 时仅返回 undefined，用于被动快照）并返回 undefined */
-  async ensureCli(opts: { silent?: boolean } = {}): Promise<string | undefined> {
-    if (this.cliChecked && this.cliCmd) {
-      return this.cliCmd;
+  /**
+   * 调用来源解析链（缓存；contracts/cli.md §1）：
+   * 设置直跑 → 内置源码 + uvx → PATH specify → none（silent 时不回报错误）
+   */
+  async ensureInvocation(opts: { silent?: boolean } = {}): Promise<Invocation | undefined> {
+    if (this.invocationResolved && this.invocation) {
+      return this.invocation;
     }
+    // 1. 设置显式路径 → 直跑
     const configured = this.configuredPath().trim();
-    if (configured.length > 0) {
-      if (fs.existsSync(configured)) {
-        this.cliCmd = configured;
-        this.cliChecked = true;
-        return this.cliCmd;
-      }
-      if (!opts.silent) {
-        this.deps.onError({
-          code: 'cli-not-found',
-          message: `未找到 specify CLI（设置路径无效：${configured}）`,
-          suggestion: INSTALL_GUIDANCE,
-          canRetry: true,
-        });
-      }
-      return undefined;
+    if (configured.length > 0 && fs.existsSync(configured)) {
+      this.invocation = { source: 'setting', cmd: configured, argvPrefix: [] };
+      this.invocationResolved = true;
+      return this.invocation;
     }
-    const found = findSpecifyInPath(process.env.PATH ?? '', process.platform);
-    if (!found) {
-      if (!opts.silent) {
-        this.deps.onError({
-          code: 'cli-not-found',
-          message: '未找到 specify CLI',
-          suggestion: INSTALL_GUIDANCE,
-          canRetry: true,
-        });
-      }
-      return undefined;
+    // 2. 内置源码 + uvx
+    const bundled = resolveBundledSource(this.deps.builtinSrcDir(), this.deps.bundleStorageDir());
+    const uvx = findExeInPath('uvx', process.env.PATH ?? '', process.platform);
+    if (bundled && uvx) {
+      this.invocation = {
+        source: 'bundled',
+        cmd: uvx,
+        argvPrefix: ['--from', bundled.dir, 'specify'],
+        srcDir: bundled.dir,
+        version: bundled.version,
+      };
+      this.invocationResolved = true;
+      return this.invocation;
     }
-    this.cliCmd = found;
-    this.cliChecked = true;
-    return this.cliCmd;
+    // 3. PATH specify 兜底
+    if (this.deps.allowPathFallback !== false) {
+      const found = findSpecifyInPath(process.env.PATH ?? '', process.platform);
+      if (found) {
+        this.invocation = { source: 'path', cmd: found, argvPrefix: [] };
+        this.invocationResolved = true;
+        return this.invocation;
+      }
+    }
+    // 4. 无来源
+    if (!opts.silent) {
+      const missingUv = bundled !== undefined; // 有内置源但缺 uv
+      this.deps.onError({
+        code: 'cli-not-found',
+        message: missingUv
+          ? '未找到 uv（直跑内置 Spec Kit 源码需要 uv）'
+          : '未找到可用的 Spec Kit 初始化来源（uv 与 specify CLI 均不可用）',
+        suggestion: INSTALL_GUIDANCE,
+        canRetry: true,
+      });
+    }
+    return undefined;
   }
 
-  /** CLI 版本（--version；缓存） */
+  /** 当前调用来源（供面板显示；undefined = 无来源） */
+  async currentSource(): Promise<InvocationSource> {
+    const inv = await this.ensureInvocation({ silent: true });
+    return inv ? inv.source : 'none';
+  }
+
+  /** CLI/内置源版本（bundled → pyproject 解析；direct → --version；缓存） */
   async getVersion(): Promise<string | undefined> {
-    const cli = await this.ensureCli({ silent: true });
-    if (!cli) {
-      return undefined;
+    const inv = await this.ensureInvocation({ silent: true });
+    if (!inv || inv.version) {
+      return inv?.version;
     }
     if (this.versionChecked) {
-      return this.cliVersion;
+      return inv.version;
     }
     const lines: string[] = [];
-    const handle = runSpecify(this.deps.getRoot(), cli, ['--version'], (line) => lines.push(line));
+    const handle = runSpecify(this.deps.getRoot(), inv.cmd, ['--version'], (line) =>
+      lines.push(line),
+    );
     const result = await handle.promise;
     if (result.code === 0) {
-      this.cliVersion = parseVersionText(lines.join('\n'));
+      const version = parseVersionText(lines.join('\n'));
+      if (version) {
+        inv.version = version;
+      }
     }
     this.versionChecked = true;
-    return this.cliVersion;
+    return inv.version;
   }
 
-  /** 是否支持 specify upgrade 自升级（缓存） */
-  async detectUpgradeSupport(): Promise<boolean> {
-    const cli = await this.ensureCli({ silent: true });
-    if (!cli) {
-      return false;
-    }
-    if (this.upgradeSupportChecked) {
-      return this.upgradeSupported;
-    }
-    this.upgradeSupported = await detectUpgradeSupportViaRun((args, onLine) =>
-      runSpecify(this.deps.getRoot(), cli, args, onLine),
-    );
-    this.upgradeSupportChecked = true;
-    return this.upgradeSupported;
-  }
-
-  /** `specify init` 旗标能力（--help 解析，缓存；buildInitArgs/checkCapabilities 输入） */
+  /** `specify init` 旗标能力：bundled 源为 1.2.x 全能力（免 --help 探测）；direct 探测（缓存） */
   async getInitCapabilities(): Promise<InitCapabilities> {
-    const cli = await this.ensureCli({ silent: true });
-    if (!cli) {
+    const inv = await this.ensureInvocation({ silent: true });
+    if (!inv) {
+      return FULL_INIT_CAPS;
+    }
+    if (inv.source === 'bundled') {
       return FULL_INIT_CAPS;
     }
     if (this.capsChecked && this.caps) {
       return this.caps;
     }
     const lines: string[] = [];
-    const handle = runSpecify(this.deps.getRoot(), cli, ['init', '--help'], (line) =>
+    const handle = runSpecify(this.deps.getRoot(), inv.cmd, ['init', '--help'], (line) =>
       lines.push(line),
     );
     const result = await handle.promise;
@@ -231,22 +261,21 @@ export class InitRunner {
 
   /** 重新检测（设置变更或用户点击「重新检测」） */
   invalidateCli(): void {
-    this.cliChecked = false;
-    this.cliCmd = undefined;
+    this.invocationResolved = false;
+    this.invocation = undefined;
     this.versionChecked = false;
-    this.cliVersion = undefined;
-    this.upgradeSupportChecked = false;
     this.capsChecked = false;
     this.caps = undefined;
   }
 
   get isRunning(): boolean {
-    return this.handle !== undefined;
+    return this.handle !== undefined || this.downloadAbort !== undefined;
   }
 
   cancel(): void {
     this.cancelled = true;
     this.handle?.cancel();
+    this.downloadAbort?.abort();
   }
 
   /** T025 startInit 编排（能力感知：不支持的高级选项 → 升级指引而非裸错误） */
@@ -264,11 +293,11 @@ export class InitRunner {
     const caps = await this.getInitCapabilities();
     const unsupported = checkCapabilities(options, caps);
     if (unsupported) {
-      const version = this.cliVersion ? `（当前 ${this.cliVersion}）` : '';
+      const version = this.invocation?.version ? `（当前 ${this.invocation.version}）` : '';
       this.deps.onError({
         code: 'cli-failed',
         message: `当前 CLI${version} 不支持选项 ${unsupported}，已跳过本次初始化`,
-        suggestion: UPGRADE_GUIDANCE,
+        suggestion: '点击「更新内置 Spec Kit」升级内置源码后重试',
         canRetry: true,
         context: { integrationId: options.integrationId },
       });
@@ -303,38 +332,121 @@ export class InitRunner {
     });
   }
 
-  /** 升级 Spec Kit CLI（specify upgrade；需网络访问 GitHub Releases）。升级中不可取消（安装器中断有风险） */
-  async upgradeSpeckit(): Promise<void> {
-    const supported = await this.detectUpgradeSupport();
-    if (!supported) {
+  /**
+   * 更新内置 Spec Kit（v0.4.0）：从 github/spec-kit 最新 Release 下载源码刷新内置副本。
+   * 下载可取消；解压阶段不可取消。成功后 invalidateCli → 下次 init 使用新版本。
+   */
+  async updateBundledSpeckit(): Promise<void> {
+    if (this.isRunning) {
       this.deps.onError({
-        code: 'cli-failed',
-        message: '当前 CLI 版本较旧，不支持自升级（specify upgrade 命令不存在）',
-        suggestion: UPGRADE_GUIDANCE,
+        code: 'io-error',
+        message: '已有操作正在执行，请等待完成或取消',
         canRetry: false,
       });
       return;
     }
-    await this.runCliOperation('upgrade', 'speckit', ['upgrade'], {
-      verifyIntegration: undefined,
-      cancellable: false,
+    const label = '正在更新内置 Spec Kit';
+    const ring: ProgressRing = { label: `${label}…`, logTail: [] };
+    const emit = (p: Progress) => {
+      this.deps.onProgress(p);
+    };
+    const base = (): Progress => ({
+      ...idleProgress(),
+      operation: 'upgrade',
+      running: true,
+      kind: 'indeterminate',
+      label: ring.label,
+      logTail: [...ring.logTail],
+      cancellable: true,
     });
-  }
 
-  private baseProgress(operation: Progress['operation'], label: string, cancellable: boolean): Progress {
-    const p = idleProgress();
-    p.operation = operation;
-    p.running = true;
-    p.kind = 'indeterminate';
-    p.label = label;
-    p.cancellable = cancellable;
-    return p;
+    this.cancelled = false;
+    emit(base());
+    this.downloadAbort = new AbortController();
+    try {
+      const result = await downloadLatestSpeckitBundle(this.deps.bundleStorageDir(), {
+        signal: this.downloadAbort.signal,
+        onStage: (stage, detail) => {
+          ring.label =
+            stage === 'resolve-tag'
+              ? '正在解析最新版本…'
+              : stage === 'download'
+                ? `正在下载 ${detail ?? ''}…`
+                : stage === 'extract'
+                  ? '正在解压内置源码…'
+                  : '更新完成';
+          this.deps.output.appendLine(`[speckit-gui] bundle ${stage} ${detail ?? ''}`);
+        },
+        onProgress: (ratio, received) => {
+          ring.ratio = ratio;
+          ring.logTail.push(
+            ratio !== undefined
+              ? `下载进度 ${(ratio * 100).toFixed(0)}%（${(received / 1024 / 1024).toFixed(1)} MB）`
+              : `已接收 ${(received / 1024 / 1024).toFixed(1)} MB`,
+          );
+          if (ring.logTail.length > RING_MAX) {
+            ring.logTail.shift();
+          }
+          emit({
+            ...base(),
+            kind: ratio !== undefined ? 'determinate' : 'indeterminate',
+            ratio,
+            label: ring.label,
+            logTail: [...ring.logTail],
+          });
+        },
+      });
+      if (this.cancelled) {
+        emit({
+          ...idleProgress(),
+          operation: 'upgrade',
+          running: false,
+          result: { outcome: 'cancelled', message: '更新已取消' },
+        });
+        return;
+      }
+      this.invalidateCli();
+      emit({
+        ...idleProgress(),
+        operation: 'upgrade',
+        running: false,
+        result: { outcome: 'success', message: `内置 Spec Kit 已更新至 ${result.tag}（v${result.version}）` },
+      });
+      this.deps.onDone();
+    } catch (err) {
+      if (this.cancelled) {
+        emit({
+          ...idleProgress(),
+          operation: 'upgrade',
+          running: false,
+          result: { outcome: 'cancelled', message: '更新已取消' },
+        });
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      this.deps.output.appendLine(`[speckit-gui] 更新失败：${message}`);
+      emit({
+        ...idleProgress(),
+        operation: 'upgrade',
+        running: false,
+        result: { outcome: 'failure', message: `更新失败：${message}` },
+      });
+      this.deps.onError({
+        code: 'cli-failed',
+        message: `更新内置 Spec Kit 失败：${message}`,
+        suggestion: '检查网络/代理后重试；GitHub API 限流时请稍后再试',
+        canRetry: true,
+      });
+      this.deps.onDone();
+    } finally {
+      this.downloadAbort = undefined;
+    }
   }
 
   private async runCliOperation(
     operation: Progress['operation'],
     integrationId: string,
-    args: string[],
+    specifyArgs: string[],
     opts: {
       verifyIntegration?: string;
       retry?:
@@ -351,10 +463,15 @@ export class InitRunner {
       });
       return;
     }
-    const cli = await this.ensureCli();
-    if (!cli) {
-      return; // cli-not-found 已回报
+    const inv = await this.ensureInvocation();
+    if (!inv) {
+      return; // 来源错误已回报
     }
+    // bundled 模式首次构建 uv 环境可能较慢（下载依赖并缓存），日志行会持续输出
+    const sourceLabel = inv.source === 'bundled' ? '内置源码' : inv.source === 'setting' ? '指定 CLI' : 'PATH CLI';
+    this.deps.output.appendLine(
+      `[speckit-gui] spawn(${inv.source}): ${inv.cmd} ${[...inv.argvPrefix, ...specifyArgs].join(' ')}`,
+    );
 
     this.cancelled = false;
     const cancellable = opts.cancellable ?? true;
@@ -362,10 +479,19 @@ export class InitRunner {
       operation === 'init'
         ? `正在初始化 ${integrationId} 环境`
         : operation === 'upgrade'
-          ? '正在升级 Spec Kit CLI'
+          ? '正在升级 Spec Kit'
           : `正在切换为 ${integrationId} 环境`;
     const ring: ProgressRing = { label: `${opLabel}…`, logTail: [] };
-    let progress = this.baseProgress(operation, ring.label, cancellable);
+    const initial: Progress = {
+      ...idleProgress(),
+      operation,
+      running: true,
+      kind: 'indeterminate',
+      label: ring.label,
+      logTail: [],
+      cancellable,
+    };
+    let progress = initial;
     this.deps.onProgress(progress);
 
     const emitLine = (line: string) => {
@@ -374,15 +500,19 @@ export class InitRunner {
         ring.logTail.shift();
       }
       this.deps.output.appendLine(`[${new Date().toISOString()}] ${line}`);
-      progress = { ...progress, label: ring.label, logTail: [...ring.logTail] };
+      progress = {
+        ...progress,
+        label: ring.label,
+        logTail: [...ring.logTail],
+      };
       this.deps.onProgress(progress);
     };
 
-    this.deps.output.appendLine(`[speckit-gui] spawn: ${cli} ${args.join(' ')}`);
-    const handle = runSpecify(this.deps.getRoot(), cli, args, emitLine);
+    const handle = runSpecify(this.deps.getRoot(), inv.cmd, [...inv.argvPrefix, ...specifyArgs], emitLine);
     this.handle = handle;
     const result = await handle.promise;
     this.handle = undefined;
+    void sourceLabel;
 
     if (this.cancelled || result.killed) {
       progress = {
@@ -420,16 +550,14 @@ export class InitRunner {
 
     // 成功后回读 init-options.json 校验 ai 一致（contracts/cli.md §2；upgrade 无需校验）
     const verified = opts.verifyIntegration ? this.verifyIntegration(opts.verifyIntegration) : true;
-    const successMessage =
-      operation === 'upgrade' ? 'Spec Kit CLI 已升级' : `工具环境已更新：${integrationId}`;
+    const successMessage = verified
+      ? `工具环境已更新：${integrationId}`
+      : '初始化完成但环境校验不一致';
     progress = {
       ...progress,
       running: false,
       cancellable: false,
-      result: {
-        outcome: verified ? 'success' : 'failure',
-        message: verified ? successMessage : '初始化完成但环境校验不一致',
-      },
+      result: { outcome: verified ? 'success' : 'failure', message: successMessage },
     };
     this.deps.onProgress(progress);
     if (!verified) {
@@ -461,17 +589,7 @@ export class InitRunner {
     integrationId: string,
   ): FriendlyError {
     const tail = stderrTail.join('\n');
-    const opLabel =
-      operation === 'init' ? '初始化' : operation === 'upgrade' ? '升级' : '切换';
-    if (/network|ECONN|ENOTFOUND|ETIMEDOUT|timeout|timed out|release/i.test(tail) && operation === 'upgrade') {
-      return {
-        code: 'cli-failed',
-        message: '升级失败：无法解析最新版本（需访问 GitHub Releases，请检查网络/代理）',
-        suggestion: '检查网络后重试，或使用手动升级指引',
-        canRetry: true,
-        context: { integrationId },
-      };
-    }
+    const opLabel = operation === 'init' ? '初始化' : operation === 'upgrade' ? '升级' : '切换';
     if (/network|ECONN|ENOTFOUND|ETIMEDOUT|timeout|timed out/i.test(tail)) {
       return {
         code: 'cli-failed',
@@ -494,7 +612,17 @@ export class InitRunner {
       return {
         code: 'cli-failed',
         message: `${opLabel}失败：所选工具不被当前 CLI 支持（${integrationId}）`,
-        suggestion: '升级 specify CLI 或换选其他工具',
+        suggestion: '更新内置 Spec Kit 或换选其他工具',
+        canRetry: true,
+        context: { integrationId },
+      };
+    }
+    if (/No such option/i.test(tail)) {
+      // 版本能力不匹配（如旧 CLI 无 --non-interactive）——能力探测本应规避，兜底提示更新内置源
+      return {
+        code: 'cli-failed',
+        message: `${opLabel}失败：CLI 版本能力不匹配（${lastSafeLine(stderrTail)}）`,
+        suggestion: '点击「更新内置 Spec Kit」后重试',
         canRetry: true,
         context: { integrationId },
       };
@@ -508,4 +636,8 @@ export class InitRunner {
       context: { integrationId },
     };
   }
+}
+
+function lastSafeLine(stderrTail: string[]): string {
+  return stderrTail[stderrTail.length - 1] ?? '退出码非 0';
 }

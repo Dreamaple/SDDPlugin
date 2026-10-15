@@ -25,6 +25,7 @@ export function activate(context: vscode.ExtensionContext): void {
     store,
     output,
     extensionUri: context.extensionUri,
+    globalStorageUri: context.globalStorageUri,
     onSnapshot: (snapshot: Snapshot) => {
       updateStatusBar(statusItem, snapshot);
     },

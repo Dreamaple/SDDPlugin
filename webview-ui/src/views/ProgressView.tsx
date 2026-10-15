@@ -62,6 +62,25 @@ export function ProgressView(props: { progress: Progress }) {
           </button>
         ) : null}
       </div>
+      {progress.kind === 'determinate' && progress.ratio !== undefined ? (
+        <div
+          style={{
+            height: 4,
+            borderRadius: 2,
+            marginTop: 6,
+            background: 'var(--vscode-input-border, #444)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              width: `${Math.round(Math.min(1, Math.max(0, progress.ratio)) * 100)}%`,
+              height: '100%',
+              background: 'var(--vscode-focusBorder, #3794ff)',
+            }}
+          />
+        </div>
+      ) : null}
       {progress.logTail.length > 0 ? (
         <div className="spk-log">
           {progress.logTail.map((line, i) => (

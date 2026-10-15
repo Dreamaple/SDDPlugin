@@ -19,6 +19,10 @@ export interface WorkspaceEnvironment {
   aiSkills?: boolean;
   /** specify CLI 是否可发现（contracts/cli.md §1 解析链） */
   cliAvailable: boolean;
+  /** specify CLI 版本（--version 解析；仅 cliAvailable 时有值） */
+  cliVersion?: string;
+  /** 当前 CLI 是否支持自升级（specify upgrade 子命令；旧版 0.x 无此命令） */
+  cliUpgradeSupported?: boolean;
   /** incomplete 时的具体缺失说明 */
   hints: string[];
 }
@@ -90,7 +94,7 @@ export interface ClarificationItem {
 
 export interface Progress {
   /** null = 无操作进行中 */
-  operation: 'init' | 'integration-install' | 'stage' | null;
+  operation: 'init' | 'integration-install' | 'stage' | 'upgrade' | null;
   running: boolean;
   kind: 'determinate' | 'indeterminate';
   label: string;
@@ -189,4 +193,5 @@ export type WebviewToHost =
   | { type: 'confirmReview'; gateId: GateId }
   | { type: 'answerClarification'; id: string; answer: string }
   | { type: 'cancelOperation' }
+  | { type: 'upgradeSpeckit' }
   | { type: 'openLogs' };

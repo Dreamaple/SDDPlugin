@@ -8,6 +8,10 @@ export interface DetectOptions {
   cliAvailable: boolean;
   /** 工具目录 label 查询（命中 → 已知集成；未命中 → 未知/自定义） */
   labelFor?: (integrationId: string) => string | undefined;
+  /** CLI 版本（--version 解析结果） */
+  cliVersion?: string;
+  /** 当前 CLI 是否支持自升级 */
+  cliUpgradeSupported?: boolean;
 }
 
 function normalizeScript(raw: unknown): ScriptType | undefined {
@@ -27,6 +31,8 @@ export async function detectEnvironment(
       state: 'missing',
       isKnownIntegration: false,
       cliAvailable,
+      cliVersion: opts.cliVersion,
+      cliUpgradeSupported: opts.cliUpgradeSupported,
       hints: [],
     };
   }
@@ -60,6 +66,8 @@ export async function detectEnvironment(
             typeof parsed.speckit_version === 'string' ? parsed.speckit_version : undefined,
           aiSkills: parsed.ai_skills === true,
           cliAvailable,
+          cliVersion: opts.cliVersion,
+          cliUpgradeSupported: opts.cliUpgradeSupported,
           hints: [],
         };
       }
@@ -81,6 +89,8 @@ export async function detectEnvironment(
     state: 'incomplete',
     isKnownIntegration: false,
     cliAvailable,
+    cliVersion: opts.cliVersion,
+    cliUpgradeSupported: opts.cliUpgradeSupported,
     hints,
   };
 }

@@ -30,10 +30,14 @@ export function App() {
       switch (msg.type) {
         case 'stateUpdated':
           setSnapshot(msg.snapshot);
-          setError(null);
+          // 注意：不在 stateUpdated 时清除错误——失败详情必须保持可见直到用户处置或新操作开始
           break;
         case 'progressUpdated':
           setProgress(msg.progress);
+          // 新操作开始（running）或成功/取消终态 → 清除旧错误
+          if (msg.progress.running || msg.progress.result?.outcome !== 'failure') {
+            setError(null);
+          }
           break;
         case 'errorRaised':
           setError(msg.error);
@@ -73,6 +77,20 @@ export function App() {
             cls: 'ok',
           };
 
+  const upgradeButton = !snapshot.multiRootBlocked && environment.cliAvailable ? (
+    <button
+      className="spk-btn secondary"
+      title={
+        environment.cliUpgradeSupported
+          ? `升级 specify CLI（当前 ${environment.cliVersion ?? '未知版本'}；需访问 GitHub Releases）`
+          : `当前 CLI ${environment.cliVersion ?? ''} 较旧、不支持自升级，点击查看手动升级指引`
+      }
+      onClick={() => postToHost({ type: 'upgradeSpeckit' })}
+    >
+      升级 Spec Kit{environment.cliVersion ? `（${environment.cliVersion}）` : ''}
+    </button>
+  ) : null;
+
   const showWizard = !snapshot.multiRootBlocked && environment.state !== 'ready';
 
   const envSummary =
@@ -94,12 +112,13 @@ export function App() {
         {envSummary ? <span className="spk-muted">{envSummary}</span> : null}
         <span style={{ flex: 1 }} />
         <FeatureSwitcher features={features} disabled={snapshot.multiRootBlocked} />
+        {upgradeButton}
         <button className="spk-btn secondary" onClick={() => postToHost({ type: 'refresh' })}>
           刷新
         </button>
       </div>
 
-      <ErrorSurface error={error} />
+      <ErrorSurface error={error} onDismiss={() => setError(null)} />
       <ProgressView progress={progress} />
 
       {snapshot.multiRootBlocked ? (

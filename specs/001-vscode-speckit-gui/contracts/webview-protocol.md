@@ -110,6 +110,11 @@
 { type: "cancelOperation" }    // 取消当前 cancellable 的 Progress
 ```
 
+### `upgradeSpeckit`（v0.3.0）
+```ts
+{ type: "upgradeSpeckit" }    // 升级 Spec Kit CLI；宿主做版本感知（旧版 0.x 无 upgrade 命令 → 回报手动升级指引）
+```
+
 ## 交互时序（关键）
 
 1. 面板创建 → Webview 加载 → `ready` → 宿主 `stateUpdated`（首帧 ≤ 1s）

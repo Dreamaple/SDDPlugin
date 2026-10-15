@@ -1,7 +1,8 @@
-// T025: 初始化/切换编排（contracts/cli.md §1/§2/§3）
+// T025: 初始化/切换/升级编排（contracts/cli.md §1/§2/§3）
 // - CLI 发现链：设置 speckitGui.specifyCliPath → PATH → 「需要安装」态
-// - init: specify init --here --integration <id> --script <ps|sh|py> [--force] --non-interactive
+// - init: specify init --here --integration <id> --script <ps|sh|py> [--force] --non-interactive（+高级选项）
 // - switch: specify integration install <id> [--force]
+// - upgrade: specify upgrade（旧版 0.x 无此命令 → 降级为手动指引）
 // - 成功后回读 init-options.json 校验 ai 一致；错误友好映射
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,11 +10,22 @@ import * as vscode from 'vscode';
 import type { FriendlyError, InitOptions, Progress } from '../../shared/protocol';
 import { idleProgress } from '../../shared/protocol';
 import type { ToolCatalog } from '../core/toolCatalog';
-import { findSpecifyInPath, runSpecify, type CliRunHandle } from './cli';
+import {
+  detectUpgradeSupportViaRun,
+  findSpecifyInPath,
+  parseVersionText,
+  runSpecify,
+  type CliRunHandle,
+} from './cli';
 
 export const INSTALL_GUIDANCE =
   'uvx --from git+https://github.com/github/spec-kit.git specify --help  ' +
   '或  pipx install specify-cli  或  pip install specify-cli';
+
+export const UPGRADE_GUIDANCE =
+  '当前 CLI 版本较旧，不支持自升级（specify upgrade）。请手动升级：' +
+  'uv tool upgrade specify-cli  或  pipx upgrade specify-cli  或  pip install -U specify-cli  ' +
+  '（git 安装方式：uv tool install --force --from git+https://github.com/github/spec-kit.git specify-cli）';
 
 export interface RunnerDeps {
   getRoot(): string;
@@ -74,6 +86,10 @@ export class InitRunner {
   private handle: CliRunHandle | undefined;
   private cliChecked = false;
   private cliCmd: string | undefined;
+  private versionChecked = false;
+  private cliVersion: string | undefined;
+  private upgradeSupportChecked = false;
+  private upgradeSupported = false;
   private cancelled = false;
 
   constructor(private readonly deps: RunnerDeps) {}
@@ -122,10 +138,48 @@ export class InitRunner {
     return this.cliCmd;
   }
 
+  /** CLI 版本（--version；缓存） */
+  async getVersion(): Promise<string | undefined> {
+    const cli = await this.ensureCli({ silent: true });
+    if (!cli) {
+      return undefined;
+    }
+    if (this.versionChecked) {
+      return this.cliVersion;
+    }
+    const lines: string[] = [];
+    const handle = runSpecify(this.deps.getRoot(), cli, ['--version'], (line) => lines.push(line));
+    const result = await handle.promise;
+    if (result.code === 0) {
+      this.cliVersion = parseVersionText(lines.join('\n'));
+    }
+    this.versionChecked = true;
+    return this.cliVersion;
+  }
+
+  /** 是否支持 specify upgrade 自升级（缓存） */
+  async detectUpgradeSupport(): Promise<boolean> {
+    const cli = await this.ensureCli({ silent: true });
+    if (!cli) {
+      return false;
+    }
+    if (this.upgradeSupportChecked) {
+      return this.upgradeSupported;
+    }
+    this.upgradeSupported = await detectUpgradeSupportViaRun((args, onLine) =>
+      runSpecify(this.deps.getRoot(), cli, args, onLine),
+    );
+    this.upgradeSupportChecked = true;
+    return this.upgradeSupported;
+  }
+
   /** 重新检测（设置变更或用户点击「重新检测」） */
   invalidateCli(): void {
     this.cliChecked = false;
     this.cliCmd = undefined;
+    this.versionChecked = false;
+    this.cliVersion = undefined;
+    this.upgradeSupportChecked = false;
   }
 
   get isRunning(): boolean {
@@ -150,9 +204,9 @@ export class InitRunner {
       return;
     }
     const args = buildInitArgs(options);
-    await this.runCliOperation('init', options.integrationId, args, options.integrationId, {
-      action: 'startInit',
-      options,
+    await this.runCliOperation('init', options.integrationId, args, {
+      verifyIntegration: options.integrationId,
+      retry: { action: 'startInit', options },
     });
   }
 
@@ -172,20 +226,37 @@ export class InitRunner {
     if (force) {
       args.push('--force');
     }
-    await this.runCliOperation('integration-install', integrationId, args, integrationId, {
-      action: 'switchIntegration',
-      integrationId,
-      force,
+    await this.runCliOperation('integration-install', integrationId, args, {
+      verifyIntegration: integrationId,
+      retry: { action: 'switchIntegration', integrationId, force },
     });
   }
 
-  private baseProgress(operation: Progress['operation'], label: string): Progress {
+  /** 升级 Spec Kit CLI（specify upgrade；需网络访问 GitHub Releases）。升级中不可取消（安装器中断有风险） */
+  async upgradeSpeckit(): Promise<void> {
+    const supported = await this.detectUpgradeSupport();
+    if (!supported) {
+      this.deps.onError({
+        code: 'cli-failed',
+        message: '当前 CLI 版本较旧，不支持自升级（specify upgrade 命令不存在）',
+        suggestion: UPGRADE_GUIDANCE,
+        canRetry: false,
+      });
+      return;
+    }
+    await this.runCliOperation('upgrade', 'speckit', ['upgrade'], {
+      verifyIntegration: undefined,
+      cancellable: false,
+    });
+  }
+
+  private baseProgress(operation: Progress['operation'], label: string, cancellable: boolean): Progress {
     const p = idleProgress();
     p.operation = operation;
     p.running = true;
     p.kind = 'indeterminate';
     p.label = label;
-    p.cancellable = true;
+    p.cancellable = cancellable;
     return p;
   }
 
@@ -193,8 +264,13 @@ export class InitRunner {
     operation: Progress['operation'],
     integrationId: string,
     args: string[],
-    verifyIntegration: string,
-    retry: { action: 'startInit'; options: InitOptions } | { action: 'switchIntegration'; integrationId: string; force: boolean },
+    opts: {
+      verifyIntegration?: string;
+      retry?:
+        | { action: 'startInit'; options: InitOptions }
+        | { action: 'switchIntegration'; integrationId: string; force: boolean };
+      cancellable?: boolean;
+    } = {},
   ): Promise<void> {
     if (this.handle) {
       this.deps.onError({
@@ -210,14 +286,15 @@ export class InitRunner {
     }
 
     this.cancelled = false;
-    const ring: ProgressRing = {
-      label:
-        operation === 'init'
-          ? `正在初始化 ${integrationId} 环境…`
-          : `正在切换为 ${integrationId} 环境…`,
-      logTail: [],
-    };
-    let progress = this.baseProgress(operation, ring.label);
+    const cancellable = opts.cancellable ?? true;
+    const opLabel =
+      operation === 'init'
+        ? `正在初始化 ${integrationId} 环境`
+        : operation === 'upgrade'
+          ? '正在升级 Spec Kit CLI'
+          : `正在切换为 ${integrationId} 环境`;
+    const ring: ProgressRing = { label: `${opLabel}…`, logTail: [] };
+    let progress = this.baseProgress(operation, ring.label, cancellable);
     this.deps.onProgress(progress);
 
     const emitLine = (line: string) => {
@@ -249,32 +326,39 @@ export class InitRunner {
     }
 
     if (result.code !== 0) {
+      const lastLine = result.stderrTail[result.stderrTail.length - 1] ?? '退出码非 0';
       progress = {
         ...progress,
         running: false,
         cancellable: false,
-        result: { outcome: 'failure', message: '操作失败，可重试' },
+        result: { outcome: 'failure', message: `${opLabel}失败：${lastLine}` },
       };
       this.deps.onProgress(progress);
       const mapped = this.mapCliFailure(result.stderrTail, operation, integrationId);
       this.deps.onError({
         ...mapped,
         // 上下文驱动重试：ErrorSurface 依据 action 重放原操作（contracts/webview-protocol.md）
-        context: { ...mapped.context, action: retry.action, ...(retry as object) },
+        context: {
+          ...mapped.context,
+          ...(opts.retry as object),
+        },
       });
       this.deps.onDone();
       return;
     }
 
-    // 成功后回读 init-options.json 校验 ai 一致（contracts/cli.md §2）
-    const verified = this.verifyIntegration(verifyIntegration);
+    // 成功后回读 init-options.json 校验 ai 一致（contracts/cli.md §2；upgrade 无需校验）
+    const verified = opts.verifyIntegration ? this.verifyIntegration(opts.verifyIntegration) : true;
+    const successMessage =
+      operation === 'upgrade' ? 'Spec Kit CLI 已升级' : `工具环境已更新：${integrationId}`;
     progress = {
       ...progress,
       running: false,
       cancellable: false,
-      result: verified
-        ? { outcome: 'success', message: `工具环境已更新：${integrationId}` }
-        : { outcome: 'failure', message: '初始化完成但环境校验不一致' },
+      result: {
+        outcome: verified ? 'success' : 'failure',
+        message: verified ? successMessage : '初始化完成但环境校验不一致',
+      },
     };
     this.deps.onProgress(progress);
     if (!verified) {
@@ -306,7 +390,17 @@ export class InitRunner {
     integrationId: string,
   ): FriendlyError {
     const tail = stderrTail.join('\n');
-    const opLabel = operation === 'init' ? '初始化' : '切换';
+    const opLabel =
+      operation === 'init' ? '初始化' : operation === 'upgrade' ? '升级' : '切换';
+    if (/network|ECONN|ENOTFOUND|ETIMEDOUT|timeout|timed out|release/i.test(tail) && operation === 'upgrade') {
+      return {
+        code: 'cli-failed',
+        message: '升级失败：无法解析最新版本（需访问 GitHub Releases，请检查网络/代理）',
+        suggestion: '检查网络后重试，或使用手动升级指引',
+        canRetry: true,
+        context: { integrationId },
+      };
+    }
     if (/network|ECONN|ENOTFOUND|ETIMEDOUT|timeout|timed out/i.test(tail)) {
       return {
         code: 'cli-failed',

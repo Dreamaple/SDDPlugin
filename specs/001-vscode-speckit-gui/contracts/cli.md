@@ -38,11 +38,20 @@ specify integration install <integrationId> [--script <ps|sh|py>] [--force]
 - `--script` 省略时由 CLI 依 init-options.json / 平台默认；切换前宿主展示当前环境与影响提示（FR-004 二次确认）
 - 成功后同 init 的回读校验
 
-### check（自检）
+### upgrade（升级 Spec Kit CLI，v0.3.0）
 ```text
-specify check
+specify upgrade
 ```
-- 用于"环境诊断"动作（可选按钮）；输出透传至 OutputChannel，结果以通知摘要呈现
+- 版本感知：先运行 `specify upgrade --help` 探测——exit 0 → 支持自升级；"No such command"（旧版 0.x）→ 不运行，回报 UPGRADE_GUIDANCE（uv tool upgrade / pipx upgrade / pip -U / git 重装指引）
+- 需要网络（解析 GitHub Releases 最新稳定版）；bare 调用立即执行、无确认提示
+- **升级中不可取消**（安装器中断有风险），进度仅作展示
+- 成功后宿主 refresh → 重新读取 `specify --version` 与环境
+
+### check / --version（环境诊断）
+```text
+specify check      # 检查必需工具（输出透传 OutputChannel，结果以通知摘要呈现）
+specify --version  # 版本探测：specify 0.13.1.dev0 → 0.13.1.dev0（parseVersionText，版本显示与升级支持判定输入）
+```
 
 ## 3. 错误映射表（友好文案，FR-011）
 

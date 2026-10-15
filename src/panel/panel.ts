@@ -171,6 +171,9 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
     const runner = await this.ensureRunner();
     const cli = await runner.ensureCli({ silent: true }).catch(() => undefined);
     const cliAvailable = !multiRootBlocked && cli !== undefined;
+    const [cliVersion, cliUpgradeSupported] = multiRootBlocked
+      ? [undefined, undefined]
+      : await Promise.all([runner.getVersion().catch(() => undefined), runner.detectUpgradeSupport().catch(() => false)]);
 
     const environment = multiRootBlocked
       ? {
@@ -179,7 +182,12 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
           cliAvailable: false,
           hints: ['工作区非单根，v1 不支持 multi-root'],
         }
-      : await detectEnvironment(root, { cliAvailable, labelFor: catalog.labelFor });
+      : await detectEnvironment(root, {
+          cliAvailable,
+          labelFor: catalog.labelFor,
+          cliVersion,
+          cliUpgradeSupported,
+        });
 
     const features = multiRootBlocked ? [] : await scanFeatures(root);
     const preferred = this.deps.store.getActiveFeature();
@@ -302,6 +310,9 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
       case 'cancelOperation':
         this.runner?.cancel();
         break;
+      case 'upgradeSpeckit':
+        await this.handleUpgrade();
+        break;
       case 'openLogs':
         this.deps.output.show();
         break;
@@ -393,6 +404,30 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
   }
 
   // ---------- selectFeature（US2） ----------
+
+  /** 升级 Spec Kit CLI（v0.3.0：版本感知——旧版 CLI 无 upgrade 命令时给出手动指引） */
+  private async handleUpgrade(): Promise<void> {
+    if (this.deps.rootUri === undefined) {
+      await this.postWorkspaceMissing();
+      return;
+    }
+    const runner = await this.ensureRunner();
+    const cli = await runner.ensureCli({ silent: true }).catch(() => undefined);
+    if (!cli) {
+      await this.post({
+        type: 'errorRaised',
+        error: {
+          code: 'cli-not-found',
+          message: '未找到 specify CLI，无法升级',
+          suggestion: '请先安装 specify CLI（见安装指引）',
+          canRetry: true,
+        },
+      });
+      return;
+    }
+    await runner.upgradeSpeckit();
+    await this.refresh();
+  }
 
   private async handleSelectFeature(dirName: string): Promise<void> {
     const features = await scanFeatures(this.deps.rootUri?.fsPath ?? '');

@@ -64,6 +64,37 @@ function killTree(child: ChildProcess): void {
   }
 }
 
+/** 从 `specify --version` 输出解析版本号（纯函数，可测试；版本必须以数字开头，跳过 "version"/"v" 字样） */
+export function parseVersionText(output: string): string | undefined {
+  const m = /specify(?:\s+(?:version|v))?\s+v?([0-9][0-9A-Za-z.\-+]*)/i.exec(output);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * 探测 CLI 是否支持 `specify upgrade` 自升级（旧版 0.x 无此命令）。
+ * 运行 `specify upgrade --help`：exit 0 → 支持；否则（如 "No such command"）→ 不支持。
+ */
+export function detectUpgradeSupportViaRun(
+  run: (args: string[], onLine: (line: string, source: 'stdout' | 'stderr') => void) => CliRunHandle,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const collected: string[] = [];
+    const handle = run(['upgrade', '--help'], (line, source) => {
+      if (source === 'stdout' || source === 'stderr') {
+        collected.push(line);
+      }
+    });
+    void handle.promise.then((result) => {
+      const text = collected.join('\n');
+      if (/No such command/i.test(text)) {
+        resolve(false);
+        return;
+      }
+      resolve(result.code === 0);
+    });
+  });
+}
+
 /** 运行 specify CLI 子命令；返回可取消句柄（onLine 逐行回调 stdout/stderr） */
 export function runSpecify(
   root: string,

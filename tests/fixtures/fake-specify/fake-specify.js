@@ -66,6 +66,21 @@ async function main() {
     await emit('[fake-specify] all tools ok');
     process.exit(exitCode);
   }
+  if (cmd === 'upgrade') {
+    if (args.includes('--help')) {
+      // 模拟 typer help 行为：--help 恒定 exit 0（用于升级支持探测）
+      await emit('[fake-specify] usage: specify upgrade [--tag vX.Y.Z]');
+      process.exit(0);
+    }
+    for (let i = 1; i <= lines; i++) {
+      await emit(`[fake-specify] upgrade step ${i}/${lines}: resolving latest release`);
+    }
+    if (exitCode === 0) {
+      await emit('[fake-specify] Upgraded specify-cli: 0.0.0-fake -> 1.0.0-fake');
+    }
+    await emit('[fake-specify] done');
+    process.exit(exitCode);
+  }
   await emit(`[fake-specify] unknown command: ${cmd ?? ''}`);
   process.exit(2);
 }

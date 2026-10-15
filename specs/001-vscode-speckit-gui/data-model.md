@@ -16,6 +16,8 @@
 | `isKnownIntegration` | `boolean` | `ai` 是否命中内置目录 |
 | `script` | `"sh" \| "ps" \| "py" \| undefined` | 脚本类型 |
 | `speckitVersion` | `string \| undefined` | init-options.json `speckit_version` |
+| `cliVersion` | `string \| undefined` | specify CLI 版本（`--version` 解析，v0.3.0） |
+| `cliUpgradeSupported` | `boolean \| undefined` | CLI 是否支持 `specify upgrade`（v0.3.0） |
 | `cliAvailable` | `boolean` | `specify` CLI 是否可发现（R12 解析链） |
 | `hints` | `string[]` | `incomplete` 时的具体缺失说明（如"init-options.json 缺失或损坏"） |
 
@@ -108,7 +110,7 @@ completed(当前最高阶段) ──nextStep指向──▶ 下一阶段 not_sta
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `operation` | `"init" \| "integration-install" \| "stage"` | 操作类型 |
+| `operation` | `"init" \| "integration-install" \| "stage" \| "upgrade" \| null` | 操作类型（upgrade 仅展示进度、不可取消） |
 | `kind` | `"determinate" \| "indeterminate"` | 已知/未知步数 |
 | `label` | `string` | 当前操作名（如"正在初始化 claude 环境…"） |
 | `logTail` | `string[]` | CLI 最近输出行（环形，≤ 10 行） |

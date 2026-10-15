@@ -13,12 +13,36 @@ export function ProgressView(props: { progress: Progress }) {
     const icon =
       progress.result.outcome === 'success' ? '✅' : progress.result.outcome === 'cancelled' ? '🟡' : '❌';
     return (
-      <div className={`spk-banner ${progress.result.outcome === 'success' ? 'info' : 'error'}`}>
-        <strong>
+    <div className="spk-banner error" role="alert">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <strong style={{ flex: 1 }}>
           {icon} {progress.result.message}
         </strong>
+        <button
+          className="spk-btn secondary"
+          style={{ padding: '1px 8px', flex: 'none' }}
+          onClick={() => postToHost({ type: 'refresh' })}
+          title="关闭此提示"
+        >
+          ×
+        </button>
       </div>
-    );
+      {progress.result.outcome === 'failure' && progress.logTail.length > 0 ? (
+        <>
+          <div className="spk-log" style={{ marginTop: 8 }}>
+            {progress.logTail.slice(-3).map((line, i) => (
+              <div key={i}>{line}</div>
+            ))}
+          </div>
+          <div className="spk-row" style={{ marginTop: 8 }}>
+            <button className="spk-btn secondary" onClick={() => postToHost({ type: 'openLogs' })}>
+              查看日志
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
   }
 
   return (

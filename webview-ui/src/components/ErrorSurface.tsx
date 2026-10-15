@@ -1,4 +1,4 @@
-// T021: 全局错误呈现组件（FR-011：友好文案 + 建议操作 + 上下文驱动重试 + 查看日志）
+// T021: 全局错误呈现组件（FR-011：友好文案 + 建议操作 + 上下文驱动重试 + 查看日志 + 可关闭）
 import { postToHost } from '../vscode';
 import type { FriendlyError } from '../../../shared/protocol';
 
@@ -9,8 +9,8 @@ interface RetryContext {
   force?: boolean;
 }
 
-export function ErrorSurface(props: { error: FriendlyError | null }) {
-  const { error } = props;
+export function ErrorSurface(props: { error: FriendlyError | null; onDismiss?: () => void }) {
+  const { error, onDismiss } = props;
   if (!error) {
     return null;
   }
@@ -39,14 +39,26 @@ export function ErrorSurface(props: { error: FriendlyError | null }) {
 
   return (
     <div className="spk-banner error" role="alert">
-      <div>
-        <strong>⚠ {error.message}</strong>
-      </div>
-      {error.suggestion ? (
-        <div className="spk-implication" style={{ marginTop: 4 }}>
-          建议：{error.suggestion}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <strong>⚠ {error.message}</strong>
+          {error.suggestion ? (
+            <div className="spk-implication" style={{ marginTop: 4 }}>
+              建议：{error.suggestion}
+            </div>
+          ) : null}
         </div>
-      ) : null}
+        {onDismiss ? (
+          <button
+            className="spk-btn secondary"
+            style={{ padding: '1px 8px', flex: 'none' }}
+            onClick={onDismiss}
+            title="关闭此错误提示"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
       <div className="spk-row" style={{ marginTop: 8 }}>
         {error.canRetry ? (
           <button className="spk-btn" onClick={retryAction}>

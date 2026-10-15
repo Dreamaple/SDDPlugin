@@ -1,0 +1,25 @@
+# Node / 构建产物
+node_modules/
+dist/
+webview-ui/dist/
+build/
+coverage/
+*.log
+
+# 环境变量
+.env*
+
+# 打包产物
+*.vsix
+
+# 内嵌参考副本（spec-kit 源码快照，仅本地开发对照用，不入库）
+input/
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# speckit 本地开发缓存
+.specify-dev/

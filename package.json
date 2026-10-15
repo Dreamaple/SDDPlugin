@@ -1,0 +1,107 @@
+{
+  "name": "speckit-gui",
+  "displayName": "Speckit GUI",
+  "description": "Spec Kit 可视化面板：图形化初始化、工具环境识别/切换、工作流引导、进度与澄清",
+  "version": "0.1.0",
+  "publisher": "speckit-gui",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dreamaple/SDDPlugin.git"
+  },
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:speckitGui.panel"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "speckitGui",
+          "title": "Speckit",
+          "icon": "media/speckit.svg"
+        }
+      ]
+    },
+    "views": {
+      "speckitGui": [
+        {
+          "type": "webview",
+          "id": "speckitGui.panel",
+          "name": "Speckit 面板"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "speckitGui.openPanel",
+        "title": "Speckit: 打开面板"
+      },
+      {
+        "command": "speckitGui.refresh",
+        "title": "Speckit: 刷新状态"
+      }
+    ],
+    "configuration": {
+      "title": "Speckit GUI",
+      "properties": {
+        "speckitGui.specifyCliPath": {
+          "type": "string",
+          "default": "",
+          "description": "specify CLI 可执行文件完整路径；留空则在 PATH 中查找 specify"
+        },
+        "speckitGui.dispatchTransport": {
+          "type": "string",
+          "enum": [
+            "chat-open",
+            "clipboard"
+          ],
+          "default": "chat-open",
+          "enumDescriptions": [
+            "打开 AI 聊天并预填命令令牌",
+            "复制令牌到剪贴板并通知"
+          ],
+          "description": "speckit 命令触发传输层"
+        },
+        "speckitGui.answerPrefix": {
+          "type": "string",
+          "default": "**答案**: ",
+          "description": "澄清答案写回 spec 时的前缀；设为空串则仅写答案文本"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js && vite build --config webview-ui/vite.config.ts",
+    "watch:ext": "node esbuild.js --watch",
+    "watch:webview": "vite build --watch --config webview-ui/vite.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview-ui/tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint src shared tests webview-ui/src",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.99.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "@vscode/test-electron": "^2.5.1",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.23.1",
+    "eslint": "^9.10.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.5.0",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.1"
+  }
+}

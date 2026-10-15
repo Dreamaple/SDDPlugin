@@ -20,11 +20,15 @@
 - 退出码 0 = 成功；非 0 = 失败（`cli-failed`，message 取 stderr 尾行摘要 + 友好映射，原始输出入 OutputChannel `Speckit GUI`）
 - 超时：无输出 > 120s 视为疑似挂起 → 提示用户（不自动杀进程）
 
-### init（全新初始化）
+### init（全新初始化，2026-10-15 增强：覆盖官方完整旗标）
 ```text
-specify init --here --integration <integrationId> --script <ps|sh|py> --force --non-interactive
+specify init --here --integration <id> --script <ps|sh|py> [--force] --non-interactive
+             [--preset=<id>] [--extension=<name>]… [--integration-options=<text>]
+             [--ignore-agent-tools] [--allow-symlinks] [--trust-extension-urls] [--trust-integration]
 ```
+- 参数由 `buildInitArgs()`（`src/init/initRunner.ts`，纯函数）构建；值型选项统一 `--flag=value` 形式，规避以 "-" 开头的值被解析为新旗标
 - 前置校验：工作区未初始化或用户已确认覆盖（`force` 仅在用户二次确认后为 true，FR-004/FR-015）
+- 高级选项默认关闭/留空：preset、extension（可重复）、integration-options、ignore-agent-tools、allow-symlinks、trust-extension-urls、trust-integration（后两项仅外部内容需要，UI 附警示）
 - 成功后：重读 init-options.json 推送 `stateUpdated`；校验 `ai` == 请求值，不一致 → `errorRaised(cli-failed)`
 
 ### integration install（工具切换 / 追加安装）

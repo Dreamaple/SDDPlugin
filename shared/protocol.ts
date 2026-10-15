@@ -151,6 +151,21 @@ export interface InitOptions {
   integrationId: string;
   script: ScriptType;
   force: boolean;
+  // —— 高级选项（对齐 specify init 完整旗标，默认关闭/留空）——
+  /** --preset <id>（bundled: lean / constitution-sync；可自定义 id） */
+  preset?: string;
+  /** --extension <name>（可重复；bundled: git / agent-context / assess / bug / github） */
+  extensions?: string[];
+  /** --integration-options=<text>（如 "--commands-dir .myagent/cmds"） */
+  integrationOptions?: string;
+  /** --ignore-agent-tools（跳过 agent 工具检查） */
+  ignoreAgentTools?: boolean;
+  /** --allow-symlinks */
+  allowSymlinks?: boolean;
+  /** --trust-extension-urls（外部 URL 安装免信任提示） */
+  trustExtensionUrls?: boolean;
+  /** --trust-integration（外部集成包免信任提示） */
+  trustIntegration?: boolean;
 }
 
 export type HostToWebview =

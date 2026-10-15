@@ -101,7 +101,7 @@
 ### Functional Requirements
 
 - **FR-001**: 系统 MUST 检测当前工作区是否已存在 Spec Kit 环境（.specify 目录及关键文件），并在面板中清晰展示"已初始化 / 未初始化 / 不完整"状态
-- **FR-002**: 系统 MUST 提供图形化初始化向导，收集初始化所需选项（AI 工具、脚本类型），并固定在当前工作区根目录执行初始化（v1 语义，见 Assumptions 单工作区根场景）；当目标目录已存在 Spec Kit 配置时 MUST 先请求用户确认覆盖
+- **FR-002**: 系统 MUST 提供图形化初始化向导，收集初始化所需选项（AI 工具、脚本类型，以及 Spec Kit 官方 init 高级选项：preset / extension / integration-options / ignore-agent-tools / allow-symlinks / trust-*，默认关闭），并固定在当前工作区根目录执行初始化（v1 语义，见 Assumptions 单工作区根场景）；当目标目录已存在 Spec Kit 配置时 MUST 先请求用户确认覆盖
 - **FR-003**: 系统 MUST 识别当前项目已配置的 AI 工具环境（如 Cursor Agent、Claude、Copilot、Gemini 等受支持工具），并在面板中显示
 - **FR-004**: 用户 MUST 能够通过图形界面从受支持工具列表中选择/切换工具环境；覆盖已有配置前系统 MUST 请求用户二次确认
 - **FR-005**: 系统 MUST 将 Spec Kit 工作流呈现为有序阶段列表，每个阶段具有状态标识（未开始/进行中/已完成/出错），当前建议阶段高亮

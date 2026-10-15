@@ -31,6 +31,45 @@ interface ProgressRing {
 
 const RING_MAX = 10;
 
+/**
+ * 构建 `specify init` 参数（纯函数，可测试；contracts/cli.md §2）。
+ * 值型选项统一使用 `--flag=value` 形式（避免以 "-" 开头的值被解析为新旗标）。
+ */
+export function buildInitArgs(o: InitOptions): string[] {
+  const args = ['init', '--here', '--integration', o.integrationId, '--script', o.script];
+  if (o.force) {
+    args.push('--force');
+  }
+  const preset = o.preset?.trim();
+  if (preset) {
+    args.push(`--preset=${preset}`);
+  }
+  for (const ext of o.extensions ?? []) {
+    const t = ext.trim();
+    if (t) {
+      args.push(`--extension=${t}`);
+    }
+  }
+  const io = o.integrationOptions?.trim();
+  if (io) {
+    args.push(`--integration-options=${io}`);
+  }
+  if (o.ignoreAgentTools) {
+    args.push('--ignore-agent-tools');
+  }
+  if (o.allowSymlinks) {
+    args.push('--allow-symlinks');
+  }
+  if (o.trustExtensionUrls) {
+    args.push('--trust-extension-urls');
+  }
+  if (o.trustIntegration) {
+    args.push('--trust-integration');
+  }
+  args.push('--non-interactive');
+  return args;
+}
+
 export class InitRunner {
   private handle: CliRunHandle | undefined;
   private cliChecked = false;
@@ -110,18 +149,7 @@ export class InitRunner {
       });
       return;
     }
-    const args = [
-      'init',
-      '--here',
-      '--integration',
-      options.integrationId,
-      '--script',
-      options.script,
-    ];
-    if (options.force) {
-      args.push('--force');
-    }
-    args.push('--non-interactive');
+    const args = buildInitArgs(options);
     await this.runCliOperation('init', options.integrationId, args, options.integrationId, {
       action: 'startInit',
       options,

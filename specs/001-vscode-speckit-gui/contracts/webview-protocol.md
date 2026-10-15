@@ -68,6 +68,14 @@
     integrationId: string;          // 必填，来自 tool-catalog
     script: "sh" | "ps" | "py";     // 必填（向导默认：Windows→ps，其他→sh）
     force: boolean;                 // 用户已见覆盖警告后的确认值
+    // —— 高级选项（默认关闭/留空，对齐 specify init 完整旗标）——
+    preset?: string;                // --preset=<id>
+    extensions?: string[];          // --extension=<name>（可重复）
+    integrationOptions?: string;    // --integration-options=<text>
+    ignoreAgentTools?: boolean;     // --ignore-agent-tools
+    allowSymlinks?: boolean;        // --allow-symlinks
+    trustExtensionUrls?: boolean;   // --trust-extension-urls
+    trustIntegration?: boolean;     // --trust-integration
   }
 }
 ```

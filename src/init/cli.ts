@@ -70,6 +70,48 @@ export function parseVersionText(output: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
+/** `specify init` 旗标能力（由 --help 文本解析；不同 CLI 版本支持面不同） */
+export interface InitCapabilities {
+  force: boolean;
+  nonInteractive: boolean;
+  preset: boolean;
+  extension: boolean;
+  integrationOptions: boolean;
+  ignoreAgentTools: boolean;
+  allowSymlinks: boolean;
+  trustExtensionUrls: boolean;
+  trustIntegration: boolean;
+}
+
+/** 全能力（最新 CLI；buildInitArgs 缺省值） */
+export const FULL_INIT_CAPS: InitCapabilities = {
+  force: true,
+  nonInteractive: true,
+  preset: true,
+  extension: true,
+  integrationOptions: true,
+  ignoreAgentTools: true,
+  allowSymlinks: true,
+  trustExtensionUrls: true,
+  trustIntegration: true,
+};
+
+/** 从 `specify init --help` 文本解析支持的旗标（纯函数，可测试） */
+export function parseInitCapabilities(helpText: string): InitCapabilities {
+  const has = (flag: string) => helpText.includes(flag);
+  return {
+    force: has('--force'),
+    nonInteractive: has('--non-interactive'),
+    preset: has('--preset'),
+    extension: has('--extension'),
+    integrationOptions: has('--integration-options'),
+    ignoreAgentTools: has('--ignore-agent-tools'),
+    allowSymlinks: has('--allow-symlinks'),
+    trustExtensionUrls: has('--trust-extension-urls'),
+    trustIntegration: has('--trust-integration'),
+  };
+}
+
 /**
  * 探测 CLI 是否支持 `specify upgrade` 自升级（旧版 0.x 无此命令）。
  * 运行 `specify upgrade --help`：exit 0 → 支持；否则（如 "No such command"）→ 不支持。

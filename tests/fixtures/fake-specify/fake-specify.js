@@ -30,8 +30,28 @@ function findArg(name) {
 async function main() {
   const cmd = args[0];
   await emit(`[fake-specify] running: ${args.join(' ')}`);
-  if (cmd === 'init' || cmd === 'integration') {
-    const integration = cmd === 'init' ? findArg('--integration') : args[2];
+  if (cmd === 'init') {
+    if (args.includes('--help')) {
+      // 模拟 1.x 全能力 CLI 的 help（供能力探测测试）——立即输出，不受 FAKE_SPECIFY_DELAY 影响
+      const usage = [
+        '[fake-specify] Usage: specify init [OPTIONS] [PROJECT_NAME]',
+        '[fake-specify] --script TEXT  Script type to use: sh or ps',
+        '[fake-specify] --force          Force merge/overwrite when using --here',
+        '[fake-specify] --non-interactive  Never prompt',
+        '[fake-specify] --preset TEXT    Install a preset during initialization',
+        '[fake-specify] --extension TEXT Install an extension during initialization',
+        '[fake-specify] --integration-options TEXT Options for the integration',
+        '[fake-specify] --ignore-agent-tools  Skip checks for coding agent tools',
+        '[fake-specify] --allow-symlinks  Persist permission for contained symlinks',
+        '[fake-specify] --trust-extension-urls  Pre-authorize external URLs',
+        '[fake-specify] --trust-integration  Authorize external integration package',
+      ];
+      for (const line of usage) {
+        process.stdout.write(line + '\n');
+      }
+      process.exit(0);
+    }
+    const integration = findArg('--integration');
     const script = findArg('--script') || 'ps';
     for (let i = 1; i <= lines; i++) {
       await emit(`[fake-specify] step ${i}/${lines}: preparing ${integration ?? '?'}`);
@@ -62,14 +82,47 @@ async function main() {
     await emit(`[fake-specify] done`);
     process.exit(exitCode);
   }
+  if (cmd === 'integration') {
+    // specify integration install <id> [--force]
+    const integration = args[2];
+    const script = findArg('--script') || 'ps';
+    for (let i = 1; i <= lines; i++) {
+      await emit(`[fake-specify] install step ${i}/${lines}: installing ${integration ?? '?'}`);
+    }
+    if (exitCode === 0 && settle && integration) {
+      const fs = require('fs');
+      const path = require('path');
+      const specDir = path.join(process.cwd(), '.specify');
+      fs.mkdirSync(specDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(specDir, 'init-options.json'),
+        JSON.stringify(
+          {
+            ai: integration,
+            ai_skills: false,
+            feature_numbering: 'sequential',
+            here: true,
+            integration,
+            script,
+            speckit_version: '1.0.0-fake',
+          },
+          null,
+          2,
+        ),
+      );
+      await emit(`[fake-specify] wrote .specify/init-options.json (ai=${integration})`);
+    }
+    await emit(`[fake-specify] done`);
+    process.exit(exitCode);
+  }
   if (cmd === 'check') {
     await emit('[fake-specify] all tools ok');
     process.exit(exitCode);
   }
   if (cmd === 'upgrade') {
     if (args.includes('--help')) {
-      // 模拟 typer help 行为：--help 恒定 exit 0（用于升级支持探测）
-      await emit('[fake-specify] usage: specify upgrade [--tag vX.Y.Z]');
+      // 模拟 typer help 行为：--help 恒定 exit 0（用于升级支持探测）——立即输出
+      process.stdout.write('[fake-specify] usage: specify upgrade [--tag vX.Y.Z]\n');
       process.exit(0);
     }
     for (let i = 1; i <= lines; i++) {

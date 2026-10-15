@@ -13,9 +13,12 @@ import type { ToolCatalog } from '../core/toolCatalog';
 import {
   detectUpgradeSupportViaRun,
   findSpecifyInPath,
+  FULL_INIT_CAPS,
+  parseInitCapabilities,
   parseVersionText,
   runSpecify,
   type CliRunHandle,
+  type InitCapabilities,
 } from './cli';
 
 export const INSTALL_GUIDANCE =
@@ -45,41 +48,72 @@ const RING_MAX = 10;
 
 /**
  * 构建 `specify init` 参数（纯函数，可测试；contracts/cli.md §2）。
- * 值型选项统一使用 `--flag=value` 形式（避免以 "-" 开头的值被解析为新旗标）。
+ * 值型选项统一使用 `--flag=value` 形式（避免以 "-" 开头的值被解析为新旗标）；
+ * 每个旗标仅在该 CLI 能力（caps）支持时输出。
  */
-export function buildInitArgs(o: InitOptions): string[] {
+export function buildInitArgs(o: InitOptions, caps: InitCapabilities = FULL_INIT_CAPS): string[] {
   const args = ['init', '--here', '--integration', o.integrationId, '--script', o.script];
-  if (o.force) {
+  if (o.force && caps.force) {
     args.push('--force');
   }
   const preset = o.preset?.trim();
-  if (preset) {
+  if (preset && caps.preset) {
     args.push(`--preset=${preset}`);
   }
-  for (const ext of o.extensions ?? []) {
-    const t = ext.trim();
-    if (t) {
-      args.push(`--extension=${t}`);
+  if (caps.extension) {
+    for (const ext of o.extensions ?? []) {
+      const t = ext.trim();
+      if (t) {
+        args.push(`--extension=${t}`);
+      }
     }
   }
   const io = o.integrationOptions?.trim();
-  if (io) {
+  if (io && caps.integrationOptions) {
     args.push(`--integration-options=${io}`);
   }
-  if (o.ignoreAgentTools) {
+  if (o.ignoreAgentTools && caps.ignoreAgentTools) {
     args.push('--ignore-agent-tools');
   }
-  if (o.allowSymlinks) {
+  if (o.allowSymlinks && caps.allowSymlinks) {
     args.push('--allow-symlinks');
   }
-  if (o.trustExtensionUrls) {
+  if (o.trustExtensionUrls && caps.trustExtensionUrls) {
     args.push('--trust-extension-urls');
   }
-  if (o.trustIntegration) {
+  if (o.trustIntegration && caps.trustIntegration) {
     args.push('--trust-integration');
   }
-  args.push('--non-interactive');
+  if (caps.nonInteractive) {
+    args.push('--non-interactive');
+  }
   return args;
+}
+
+/** 请求的高级选项中第一个不被 caps 支持的旗标名（无 → undefined） */
+export function checkCapabilities(o: InitOptions, caps: InitCapabilities): string | undefined {
+  if (o.preset?.trim() && !caps.preset) {
+    return '--preset';
+  }
+  if ((o.extensions ?? []).some((e) => e.trim()) && !caps.extension) {
+    return '--extension';
+  }
+  if (o.integrationOptions?.trim() && !caps.integrationOptions) {
+    return '--integration-options';
+  }
+  if (o.ignoreAgentTools && !caps.ignoreAgentTools) {
+    return '--ignore-agent-tools';
+  }
+  if (o.allowSymlinks && !caps.allowSymlinks) {
+    return '--allow-symlinks';
+  }
+  if (o.trustExtensionUrls && !caps.trustExtensionUrls) {
+    return '--trust-extension-urls';
+  }
+  if (o.trustIntegration && !caps.trustIntegration) {
+    return '--trust-integration';
+  }
+  return undefined;
 }
 
 export class InitRunner {
@@ -90,6 +124,8 @@ export class InitRunner {
   private cliVersion: string | undefined;
   private upgradeSupportChecked = false;
   private upgradeSupported = false;
+  private capsChecked = false;
+  private caps: InitCapabilities | undefined;
   private cancelled = false;
 
   constructor(private readonly deps: RunnerDeps) {}
@@ -173,6 +209,26 @@ export class InitRunner {
     return this.upgradeSupported;
   }
 
+  /** `specify init` 旗标能力（--help 解析，缓存；buildInitArgs/checkCapabilities 输入） */
+  async getInitCapabilities(): Promise<InitCapabilities> {
+    const cli = await this.ensureCli({ silent: true });
+    if (!cli) {
+      return FULL_INIT_CAPS;
+    }
+    if (this.capsChecked && this.caps) {
+      return this.caps;
+    }
+    const lines: string[] = [];
+    const handle = runSpecify(this.deps.getRoot(), cli, ['init', '--help'], (line) =>
+      lines.push(line),
+    );
+    const result = await handle.promise;
+    const caps = result.code === 0 ? parseInitCapabilities(lines.join('\n')) : FULL_INIT_CAPS;
+    this.caps = caps;
+    this.capsChecked = true;
+    return caps;
+  }
+
   /** 重新检测（设置变更或用户点击「重新检测」） */
   invalidateCli(): void {
     this.cliChecked = false;
@@ -180,6 +236,8 @@ export class InitRunner {
     this.versionChecked = false;
     this.cliVersion = undefined;
     this.upgradeSupportChecked = false;
+    this.capsChecked = false;
+    this.caps = undefined;
   }
 
   get isRunning(): boolean {
@@ -191,7 +249,7 @@ export class InitRunner {
     this.handle?.cancel();
   }
 
-  /** T025 startInit 编排 */
+  /** T025 startInit 编排（能力感知：不支持的高级选项 → 升级指引而非裸错误） */
   async startInit(options: InitOptions): Promise<void> {
     if (!this.deps.catalog.labelFor(options.integrationId)) {
       this.deps.onError({
@@ -203,7 +261,20 @@ export class InitRunner {
       });
       return;
     }
-    const args = buildInitArgs(options);
+    const caps = await this.getInitCapabilities();
+    const unsupported = checkCapabilities(options, caps);
+    if (unsupported) {
+      const version = this.cliVersion ? `（当前 ${this.cliVersion}）` : '';
+      this.deps.onError({
+        code: 'cli-failed',
+        message: `当前 CLI${version} 不支持选项 ${unsupported}，已跳过本次初始化`,
+        suggestion: UPGRADE_GUIDANCE,
+        canRetry: true,
+        context: { integrationId: options.integrationId },
+      });
+      return;
+    }
+    const args = buildInitArgs(options, caps);
     await this.runCliOperation('init', options.integrationId, args, {
       verifyIntegration: options.integrationId,
       retry: { action: 'startInit', options },

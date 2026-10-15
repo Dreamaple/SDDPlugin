@@ -46,8 +46,13 @@ beforeEach(() => {
 });
 
 afterAll(() => {
+  // Windows 下被终止的子进程可能短暂持有目录句柄——清理失败忽略（OS 会回收临时目录）
   for (const dir of tempRoots) {
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* ignore EPERM */
+    }
   }
   for (const [k, v] of Object.entries(savedEnv)) {
     if (v === undefined) {

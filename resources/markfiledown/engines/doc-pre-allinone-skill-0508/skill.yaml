@@ -1,0 +1,92 @@
+name: doc-pre-allinone-skill-0508
+description: Portable text-first document-to-Markdown skill bundle with block-level evidence, selective Mermaid reconstruction, demo-page original-note preservation, and pluggable multimodal readback.
+version: 1.2.1
+entrypoint: SKILL.md
+triggers:
+  - doc-markdown.pipeline
+  - agent-review-validation
+  - pdf-agent-validation
+  - agent-exec
+  - block-trace
+  - evidence-first
+  - office-document
+  - spreadsheet
+  - presentation
+  - 文档转markdown
+  - 多模态回读
+  - 证据先行
+  - docx
+  - pptx
+  - xlsx
+  - excel
+  - powerpoint
+parameters:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    inputFile:
+      type: string
+      description: Path to the source document file.
+    outputRoot:
+      type: string
+      description: Output root directory for pipeline artifacts.
+    sourceFormat:
+      type: string
+      default: auto
+    enableAgentReviewValidation:
+      type: boolean
+      default: true
+    markdownStyle:
+      type: string
+      enum: [technical, narrative, audit-friendly]
+      default: technical
+    includeAssetLinks:
+      type: boolean
+      default: true
+    agentExecMode:
+      type: string
+      enum: [builtin, external-command, disabled]
+      default: builtin
+    agentCommand:
+      type: string
+    pythonExe:
+      type: string
+  required:
+    - inputFile
+    - outputRoot
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    outputRoot:
+      type: string
+    bundleDir:
+      type: string
+    sourcePath:
+      type: string
+    finalPath:
+      type: string
+    blockCatalogPath:
+      type: string
+    blockTracePath:
+      type: string
+    agentReviewRequestPath:
+      type: string
+    agentReviewResponsePath:
+      type: string
+    agentReviewReportPath:
+      type: string
+    agentReviewSummaryPath:
+      type: string
+    integrityReportPath:
+      type: string
+    statePath:
+      type: string
+    manifestPath:
+      type: string
+    primaryOutputPath:
+      type: string
+    singleCsvPath:
+      type: string
+    csvExportsIndexPath:
+      type: string

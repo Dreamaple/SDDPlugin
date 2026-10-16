@@ -1,0 +1,75 @@
+{
+  "name": "efm-multidoc-markdown-bundle",
+  "bundle_type": "portable-skill-bundle",
+  "version": "2.1.0",
+  "entry_file": "SKILL.md",
+  "entry_command": "/efm-multidoc.pipeline",
+  "runner_command": ".\\run.ps1 -InputPath <file-or-folder> -OutputRoot <output-folder>",
+  "copy_contract": {
+    "mode": "copy-folder-as-is",
+    "required_files": [
+      "README.md",
+      "SKILL.md",
+      "skill.yaml",
+      "bundle-manifest.json",
+      "run.ps1",
+      "bundle_runner.py",
+      "pipeline_runner.py",
+      "requirements.txt"
+    ]
+  },
+  "required_inputs": [
+    "inputPath",
+    "outputRoot"
+  ],
+  "optional_inputs": [
+    "sourceFormat",
+    "enablePdfAgentValidation",
+    "markdownStyle",
+    "includeAssetLinks",
+    "enableOcr",
+    "recurse",
+    "pythonExe"
+  ],
+  "core_outputs": [
+    "index.md",
+    "batch-manifest.json",
+    "<doc-id>/source.md",
+    "<doc-id>/final.md",
+    "<doc-id>/artifacts/pages/",
+    "<doc-id>/artifacts/embedded-media/",
+    "<doc-id>/csv/*.csv",
+    "<doc-id>/evidence/*",
+    "<doc-id>/markdown/*",
+    "<doc-id>/.pipeline-state.json"
+  ],
+  "pipeline_phases": [
+    "discover",
+    "normalize",
+    "extract",
+    "ocr",
+    "review",
+    "emit"
+  ],
+  "pdf_post_markdown_agent_validation": {
+    "default_enabled": true,
+    "phase": "review",
+    "required_output": "<doc-id>/markdown/pdf-agent-review-report.json"
+  },
+  "source_formats": [
+    "pdf",
+    "doc",
+    "docx",
+    "ppt",
+    "pptx",
+    "xls",
+    "xlsx"
+  ],
+  "runtime": {
+    "preferred_entry": "run.ps1",
+    "preferred_language": "python",
+    "dependency_file": "requirements.txt",
+    "quickstart_file": "README.md",
+    "office_requirement": "Microsoft Office is required on Windows for doc/ppt/xls normalization and high-fidelity Office rendering."
+  }
+}

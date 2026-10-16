@@ -1,0 +1,48 @@
+{
+  "name": "doc-pre-allinone-skill-0508",
+  "bundle_type": "portable-skill-bundle",
+  "version": "1.0.0",
+  "entry_file": "SKILL.md",
+  "primary_interface": {
+    "type": "skill",
+    "trigger": "doc-markdown.pipeline",
+    "entry_file": "SKILL.md"
+  },
+  "fallback_interface": {
+    "type": "powershell-script",
+    "entry_file": "run.ps1",
+    "usage": ".\\run.ps1 -InputFile <document-path> -OutputRoot <output-folder>"
+  },
+  "runner_command": ".\\run.ps1 -InputFile <document-path> -OutputRoot <output-folder>",
+  "runtime": {
+    "language": "python",
+    "vendored_package": "runtime/doc_pre",
+    "dependency_file": "requirements.txt"
+  },
+  "capabilities": [
+    "generic-document-baseline-extraction",
+    "docx-document-extraction",
+    "pptx-slide-extraction",
+    "xlsx-spreadsheet-extraction",
+    "xlsx-to-csv-export",
+    "pdf-multimodal-preparation",
+    "pdf-visual-repair",
+    "block-level-evidence-catalog",
+    "block-markdown-trace",
+    "agent-review-request-response",
+    "agent-request-response-sidecars",
+    "builtin-or-external-agent-exec",
+    "integrity-reporting"
+  ],
+  "required_files": [
+    "README.md",
+    "DEPLOY.md",
+    "SKILL.md",
+    "skill.yaml",
+    "bundle-manifest.json",
+    "run.ps1",
+    "pipeline_runner.py",
+    "requirements.txt",
+    "runtime/doc_pre"
+  ]
+}

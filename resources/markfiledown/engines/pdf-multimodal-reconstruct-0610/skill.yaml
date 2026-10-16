@@ -1,0 +1,39 @@
+name: pdf-multimodal-reconstruct-0610
+description: "纯图片PDF多模态重建：OCR证据 + Agent逐页读图ASCII还原"
+version: 0.1.0
+entrypoint: SKILL.md
+triggers:
+  - pdf-multimodal-reconstruct
+  - 纯图片PDF重建
+  - 设计稿转markdown
+  - PDF多模态识别
+  - 扫描版PDF还原
+  - image-only-pdf
+  - visual-pdf-to-markdown
+parameters:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    inputFile:
+      type: string
+      description: Path to the source image-only PDF file.
+    outputRoot:
+      type: string
+      description: Output directory for the reconstructed Markdown.
+    docPreEngine:
+      type: string
+      default: doc-pre-allinone-skill-0508
+      description: Path to the doc-pre pipeline engine.
+  required:
+    - inputFile
+    - outputRoot
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    outputPath:
+      type: string
+      description: Path to the final reconstructed Markdown file.
+    sourceMdPath:
+      type: string
+      description: Path to the OCR baseline source.md from the pipeline.

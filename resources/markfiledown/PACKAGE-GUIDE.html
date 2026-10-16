@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>markfiledown-0509 Package Guide</title>
+  <style>
+    body{font-family:"Segoe UI",Arial,"Microsoft YaHei",sans-serif;margin:32px;color:#1f2933;background:#fbfcfd;line-height:1.55}
+    main{max-width:1180px;margin:0 auto}
+    h1,h2,h3{margin:0 0 12px} h2{margin-top:28px} h3{margin-top:18px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+    .card{border:1px solid #d8dee6;border-radius:8px;background:#fff;padding:14px 16px}
+    .card strong{display:block;font-size:24px;margin-top:4px}.muted{color:#52616f}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d8dee6;margin:12px 0 20px}
+    th,td{border-bottom:1px solid #e6ebf1;padding:9px 11px;text-align:left;vertical-align:top;font-size:14px}
+    th{background:#eef3f8} code{background:#eef3f8;padding:1px 4px;border-radius:4px}
+    pre{background:#17202a;color:#f5f7fa;padding:14px 16px;border-radius:8px;overflow:auto} a{color:#0b65c2}
+  </style>
+</head>
+<body>
+<main>
+  <h1>markfiledown-0509 Package Guide</h1>
+  <p class="muted">This document describes the complete releasable <code>markfiledown-0509/</code> folder, the upgrades applied from the empty-project experience, and the validation result for the current five-document run.</p>
+
+  <section class="grid">
+    <div class="card"><span class="muted">Release unit</span><strong>1 folder</strong><div><code>markfiledown-0509/</code></div></div>
+    <div class="card"><span class="muted">Vendored engines</span><strong>2</strong><div>doc-pre plus EFM</div></div>
+    <div class="card"><span class="muted">Validated broken links</span><strong>0</strong><div>for 5 promoted outputs</div></div>
+  </section>
+
+  <h2>What To Publish</h2>
+  <p>Publish the whole <code>markfiledown-0509/</code> folder. The folder vendors both source skills under <code>engines/</code>, so downstream projects do not need sibling copies of <code>doc-pre-allinone-skill-0508/</code> or <code>efm-multidoc-markdown-bundle/</code>.</p>
+
+  <h2>Package Contents</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>SKILL.md</code></td><td>Main skill entry with discovery keywords for PDF, Markdown, text-first, Mermaid, diagram, flowchart, 演示页, 原文说明, and evidence.</td></tr>
+      <tr><td><code>skill.yaml</code></td><td>Machine-readable parameters, triggers, capabilities, and output contract.</td></tr>
+      <tr><td><code>run.ps1</code></td><td>Terminal entry. Resolves Python, installs dependencies if needed, and calls the integrated runner.</td></tr>
+      <tr><td><code>markfiledown_runner.py</code></td><td>Integrated orchestrator. Runs both engines per document, chooses the promoted result, rewrites links, validates links, and writes reports.</td></tr>
+      <tr><td><code>install-workspace-skill.ps1</code></td><td>Optional silent installer for a native <code>.github/skills/markfiledown-0509/SKILL.md</code> wrapper in a target project.</td></tr>
+      <tr><td><code>workspace-wrapper/.github/skills/markfiledown-0509/SKILL.md</code></td><td>Wrapper template borrowed from the empty-project upgrade pattern.</td></tr>
+      <tr><td><code>requirements.txt</code></td><td>Combined Python dependency list for the two vendored engines.</td></tr>
+      <tr><td><code>bundle-manifest.json</code></td><td>Release manifest and core output contract.</td></tr>
+      <tr><td><code>README.md</code></td><td>Human quickstart, parameters, workspace discovery, link safety, and quiet execution notes.</td></tr>
+      <tr><td><code>PACKAGE-GUIDE.html</code></td><td>This release guide.</td></tr>
+      <tr><td><code>engines/doc-pre-allinone-skill-0508/</code></td><td>Vendored text-first evidence engine with block catalog, trace, integrity, and PDF readback.</td></tr>
+      <tr><td><code>engines/efm-multidoc-markdown-bundle/</code></td><td>Vendored multidoc/Office engine with OOXML extraction, workbook CSV, embedded-media OCR, and visual-first PDF review.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>How To Run</h2>
+  <pre><code>.\markfiledown-0509\run.ps1 -InputPath ".\docs" -OutputRoot ".\outputs\markfiledown-0509"</code></pre>
+  <p>For explicit files, pass a PowerShell array:</p>
+  <pre><code>$files = @(".\a.pdf", ".\b.docx")
+.\markfiledown-0509\run.ps1 -InputFile $files -OutputRoot ".\outputs\markfiledown-0509"</code></pre>
+
+  <h2>Borrowed Empty-Project Upgrades</h2>
+  <table>
+    <thead><tr><th>Surface</th><th>Applied Upgrade</th></tr></thead>
+    <tbody>
+      <tr><td>Discovery</td><td><code>SKILL.md</code> and <code>skill.yaml</code> descriptions now use a keyword-rich "Use when..." style including PDF, Markdown, text-first, Mermaid, diagram, flowchart, 演示页, 原文说明, and evidence.</td></tr>
+      <tr><td>Contract</td><td>The skill now states the text-first multimodal contract, region-first demo-page behavior, original note preservation, and promoted-link safety.</td></tr>
+      <tr><td>Metadata</td><td><code>skill.yaml</code> includes capabilities such as <code>text-first-multimodal-reconstruction</code>, <code>selective-mermaid-reconstruction</code>, <code>demo-page-original-note-preservation</code>, and <code>promoted-markdown-link-validation</code>.</td></tr>
+      <tr><td>Validation</td><td>Each document writes <code>link-check-report.json</code>. The package was also copied to a temporary empty project and run successfully from that copied folder.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Fixed Image Link Strategy</h2>
+  <p>The previous promoted Markdown copied an engine <code>final.md</code> to the integrated document root while leaving links like <code>artifacts/pages/page-0001-full.png</code>. Those links were relative to the engine output folder, so they broke after promotion.</p>
+  <p>The runner now rewrites local links during promotion. For example, media-center page images now point to paths like:</p>
+  <pre><code>engine-results/doc-pre/j90k-ux-v0-2-0-20240920-c56211c8/artifacts/pages/page-0001-full.png</code></pre>
+  <p>The current five-document run produced <code>0</code> broken promoted Markdown links across all five <code>link-check-report.json</code> files.</p>
+
+  <h2>Quiet Execution</h2>
+  <p>The package contains no executable calls to <code>explorer.exe</code>, <code>Start-Process</code>, <code>Invoke-Item</code>, <code>os.startfile</code>, or <code>Shell.Application</code>. It prints paths and writes reports only. If a host opens File Explorer after a task, that behavior should be disabled in the host wrapper; the replacement is to print the report path and let the user open it explicitly.</p>
+
+  <h2>Current Validation Summary</h2>
+  <table>
+    <thead><tr><th>Document</th><th>Selected Engine</th><th>doc-pre Review</th><th>EFM Review</th><th>Broken Links</th></tr></thead>
+    <tbody>
+      <tr><td>H37-系统设置 PRD V4.7.2_20231103.docx</td><td>EFM</td><td>skipped</td><td>pass</td><td>0</td></tr>
+      <tr><td>J90K_媒体中心_UX_V0.2.0_20240920.pdf</td><td>doc-pre</td><td>pass</td><td>needs-repair</td><td>0</td></tr>
+      <tr><td>J90K_空调_UX_V0.2.3_20250704.pdf</td><td>EFM</td><td>needs-repair</td><td>needs-human-review</td><td>0</td></tr>
+      <tr><td>S2(H37)_UE_IVI车辆设置_ V3.7.pdf</td><td>doc-pre</td><td>pass</td><td>not-run</td><td>0</td></tr>
+      <tr><td>平台座椅通风加热功能定义文档V0.5_20240925162350A713.pdf</td><td>doc-pre</td><td>pass</td><td>needs-repair</td><td>0</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

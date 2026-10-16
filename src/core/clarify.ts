@@ -110,3 +110,82 @@ export function hasOpenClarifications(items: ClarificationItem[]): boolean {
 export function buildReplacement(answerPrefix: string, answer: string): string {
   return `${answerPrefix}${answer}`;
 }
+
+/**
+ * 澄清派发协议后缀（v0.7.5）：附加在 /speckit.clarify 令牌后，约束 Agent 的提问方式。
+ * 背景：Agent 默认会用交互式提问工具逐条提问，问题不落盘 → 插件「澄清」面板解析不到。
+ * 协议要求：一次性输出全部问题（最多 5 个）并以 [NEEDS CLARIFICATION: ...] 标记写入
+ * spec.md，附建议选项表（Answer 列留空），由插件面板统一作答并自动写回。
+ */
+export function buildClarifyProtocolSuffix(): string {
+  return (
+    '（澄清协议：一次性输出全部澄清问题（最多 5 个），禁止使用交互式提问工具逐条询问；' +
+    '每个问题以 [NEEDS CLARIFICATION: 问题文本] 标记写入 spec.md，' +
+    '并在标记后紧跟建议选项表：| Option | Answer | Implications |（Answer 列留空）；' +
+    '用户将在插件「澄清」面板统一作答，答案会自动写回 spec，无需在聊天中等待逐题确认。）'
+  );
+}
+
+// ---------- 澄清答案应用（v0.7.6：写回走 Agent） ----------
+
+export interface ClarifyApplyEntry {
+  question: string;
+  answer: string;
+}
+
+/**
+ * 构建「澄清答案应用」派发指令（多行，发给 Agent 执行）。
+ * 自定义答案可能笼统、选项影响说明较长 → 由 Agent 结合上下文具体化后整合进 spec，
+ * 插件不再直接替换标记文本。
+ */
+export function buildClarifyApplyToken(entries: ClarifyApplyEntry[]): string {
+  const lines = [
+    '澄清答案应用：请将下列已确认的澄清结论整合进 spec.md。要求：',
+    '1. 逐条删除对应的 [NEEDS CLARIFICATION: ...] 标记，把结论改写为该章节的正式描述（需求/决策/约束）；',
+    '2. 结论较笼统时，结合该章节上下文与选项 Implications 说明具体化后再落笔，不要原样照抄；',
+    '3. 除这些标记区域外不要改动 spec 其他内容；改写完成后无需再次提问。',
+    '逐条结论：',
+    ...entries.map((e, i) => `${i + 1}. 问题：${e.question}\n   答案：${e.answer}`),
+  ];
+  return lines.join('\n');
+}
+
+/**
+ * 挑选推荐选项：显式标注「推荐/Recommended」的优先；否则取第一个选项
+ * （speckit 澄清惯例：选项按推荐度排序，首项为基线）。无选项表 → undefined。
+ */
+export function pickRecommendedOption(item: ClarificationItem): string | undefined {
+  if (!item.options || item.options.length === 0) {
+    return undefined;
+  }
+  const marked = item.options.find(
+    (o) => /推荐|recommended/i.test(o.label) || /推荐|recommended/i.test(o.implication),
+  );
+  return marked?.label ?? item.options[0]?.label;
+}
+
+/** 导出待澄清项为 Markdown（交给 Agent 或人工评审） */
+export function buildClarifyExport(featureName: string, items: ClarificationItem[]): string {
+  const lines = [
+    `# 待澄清项导出：${featureName}`,
+    '',
+    `> 导出时间：${new Date().toISOString()} · 共 ${items.length} 条待澄清项`,
+    '> 用法：可直接把本文件交给 AI Agent 逐条澄清；或人工评审后把结论写回 spec.md 对应标记处。',
+    '',
+  ];
+  items.forEach((item, i) => {
+    lines.push(`## ${i + 1}. ${item.question}`, '');
+    lines.push(`- 原始标记：\`${item.rawMarker}\``);
+    if (item.context) {
+      lines.push(`- 上下文：${item.context.replace(/\n/g, ' / ')}`);
+    }
+    if (item.options && item.options.length > 0) {
+      lines.push('- 建议选项：');
+      for (const opt of item.options) {
+        lines.push(`  - ${opt.label}：${opt.implication || '（无影响说明）'}`);
+      }
+    }
+    lines.push('');
+  });
+  return lines.join('\n');
+}

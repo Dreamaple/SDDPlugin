@@ -1,0 +1,40 @@
+{
+  "name": "markfiledown-0509",
+  "bundle_type": "portable-integrated-skill-bundle",
+  "version": "2.0.0",
+  "entry_file": "SKILL.md",
+  "entry_command": "/markfiledown.pipeline",
+  "runner_command": ".\\run.ps1 -InputPath <file-or-folder> -OutputRoot <output-folder>",
+  "integration_strategy": {
+    "doc_pre_engine": "engines/doc-pre-allinone-skill-0508",
+    "efm_engine": "engines/efm-multidoc-markdown-bundle",
+    "policy": "Run doc-pre as robust evidence fallback, run EFM as best-effort multidoc and structured extraction engine, then promote the strongest per-document output."
+  },
+  "required_files": [
+    "README.md",
+    "PACKAGE-GUIDE.html",
+    "SKILL.md",
+    "skill.yaml",
+    "bundle-manifest.json",
+    "run.ps1",
+    "install-workspace-skill.ps1",
+    "markfiledown_runner.py",
+    "requirements.txt",
+    "engines/doc-pre-allinone-skill-0508",
+    "engines/efm-multidoc-markdown-bundle",
+    "workspace-wrapper/.github/skills/markfiledown-0509/SKILL.md"
+  ],
+  "core_outputs": [
+    "index.md",
+    "batch-manifest.json",
+    "comparison-matrix.md",
+    "report.html",
+    "<doc-id>/final.md",
+    "<doc-id>/source.md",
+    "<doc-id>/comparison.md",
+    "<doc-id>/markfiledown-decision.json",
+    "<doc-id>/link-check-report.json",
+    "<doc-id>/engine-results/doc-pre/",
+    "<doc-id>/engine-results/efm/"
+  ]
+}

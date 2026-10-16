@@ -12,8 +12,14 @@ export function ProgressView(props: { progress: Progress }) {
   if (progress.result) {
     const icon =
       progress.result.outcome === 'success' ? '✅' : progress.result.outcome === 'cancelled' ? '🟡' : '❌';
+    const bannerCls =
+      progress.result.outcome === 'success'
+        ? 'spk-banner ok'
+        : progress.result.outcome === 'cancelled'
+          ? 'spk-banner'
+          : 'spk-banner error';
     return (
-    <div className="spk-banner error" role="alert">
+    <div className={bannerCls} role="alert">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <strong style={{ flex: 1 }}>
           {icon} {progress.result.message}
@@ -21,7 +27,7 @@ export function ProgressView(props: { progress: Progress }) {
         <button
           className="spk-btn secondary"
           style={{ padding: '1px 8px', flex: 'none' }}
-          onClick={() => postToHost({ type: 'refresh' })}
+          onClick={() => postToHost({ type: 'dismissResult' })}
           title="关闭此提示"
         >
           ×

@@ -15,6 +15,7 @@ import { CliMissingView } from './views/CliMissingView';
 import { WorkflowView } from './views/WorkflowView';
 import { ProgressView } from './views/ProgressView';
 import { ClarifyView } from './views/ClarifyView';
+import { ProjectConfigView, type ProjectConfigPayload } from './views/ProjectConfigView';
 
 type Tab = 'workflow' | 'clarify';
 
@@ -24,6 +25,8 @@ export function App() {
   const [error, setError] = useState<FriendlyError | null>(null);
   const [tab, setTab] = useState<Tab>('workflow');
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // 项目配置视图（宪法占位 tag 预填）；undefined = 关闭
+  const [projectConfig, setProjectConfig] = useState<ProjectConfigPayload | undefined>(undefined);
 
   useEffect(() => {
     const off = onHostMessage((msg: HostToWebview) => {
@@ -41,6 +44,15 @@ export function App() {
           break;
         case 'errorRaised':
           setError(msg.error);
+          break;
+        case 'projectConfigLoaded':
+          setProjectConfig({
+            fields: msg.fields,
+            values: msg.values,
+            defaults: msg.defaults,
+            workspaceName: msg.workspaceName,
+            updatedAt: msg.updatedAt,
+          });
           break;
         case 'commandResult':
           setNotice(
@@ -115,6 +127,15 @@ export function App() {
         {envSummary ? <span className="spk-muted">{envSummary}</span> : null}
         <span style={{ flex: 1 }} />
         <FeatureSwitcher features={features} disabled={snapshot.multiRootBlocked} />
+        {!snapshot.multiRootBlocked ? (
+          <button
+            className="spk-btn secondary"
+            title="预填宪法占位 tag（项目名/模块名/包根等），存于 .specify/project-config.json"
+            onClick={() => postToHost({ type: 'loadProjectConfig' })}
+          >
+            项目配置
+          </button>
+        ) : null}
         {upgradeButton}
         <button className="spk-btn secondary" onClick={() => postToHost({ type: 'refresh' })}>
           刷新
@@ -124,7 +145,9 @@ export function App() {
       <ErrorSurface error={error} onDismiss={() => setError(null)} />
       <ProgressView progress={progress} />
 
-      {snapshot.multiRootBlocked ? (
+      {projectConfig ? (
+        <ProjectConfigView config={projectConfig} onBack={() => setProjectConfig(undefined)} />
+      ) : snapshot.multiRootBlocked ? (
         <div className="spk-banner error">
           <strong>v1 仅支持单根工作区</strong>
           <div className="spk-implication" style={{ marginTop: 4 }}>
@@ -136,6 +159,7 @@ export function App() {
           <WizardView
             tools={tools}
             environment={environment}
+            running={progress.running}
             onStart={(options) => postToHost({ type: 'startInit', options })}
           />
         ) : (
@@ -153,11 +177,25 @@ export function App() {
             </button>
           </div>
           {tab === 'workflow' ? (
-            <WorkflowView stages={stages} nextStep={nextStep} reviewPending={reviewPending} />
+            <WorkflowView
+              stages={stages}
+              nextStep={nextStep}
+              reviewPending={reviewPending}
+              constitutionRules={snapshot.constitutionRules}
+              preprocessFiles={snapshot.preprocessFiles}
+              preprocessSelected={snapshot.preprocessSelected}
+              clarifyRounds={snapshot.clarifyRounds}
+              prototype={snapshot.prototype}
+              hifi={snapshot.hifiPrototype}
+              hifiConfig={snapshot.hifiConfig}
+              tokenSaved={snapshot.hifiTokenSaved}
+            />
           ) : (
             <ClarifyView
               items={clarifications}
               onAnswer={(id, answer) => postToHost({ type: 'answerClarification', id, answer })}
+              onWriteBack={(answers) => postToHost({ type: 'applyClarificationBatch', answers })}
+              onExport={() => postToHost({ type: 'exportClarifications' })}
             />
           )}
         </>

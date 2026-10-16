@@ -2,6 +2,7 @@
 // 增强：高级选项区对齐 specify init 完整旗标（preset/extensions/integration-options/开关）
 import { useMemo, useState } from 'react';
 import type { InitOptions, ScriptType, ToolCatalogEntry, WorkspaceEnvironment } from '../../../shared/protocol';
+import { postToHost } from '../vscode';
 
 const BUNDLED_PRESETS = ['lean', 'constitution-sync'];
 const BUNDLED_EXTENSIONS = ['git', 'agent-context', 'assess', 'bug', 'github'];
@@ -17,9 +18,11 @@ function defaultScript(): ScriptType {
 export function WizardView(props: {
   tools: ToolCatalogEntry[];
   environment: WorkspaceEnvironment;
+  /** 有初始化/切换/更新操作进行中（宿主 progress.running） */
+  running?: boolean;
   onStart: (options: InitOptions) => void;
 }) {
-  const { tools, environment, onStart } = props;
+  const { tools, environment, running, onStart } = props;
   const [search, setSearch] = useState('');
   const [selectedTool, setSelectedTool] = useState<string | undefined>(undefined);
   const [script, setScript] = useState<ScriptType>(defaultScript());
@@ -300,19 +303,41 @@ export function WizardView(props: {
             我确认覆盖/合并现有配置（force）
           </label>
           <div className="spk-row">
-            <button className="spk-btn primary" disabled={!forceAck} onClick={submit}>
-              确认执行（{targetLabel}）
+            <button className="spk-btn primary" disabled={!forceAck || running} onClick={submit}>
+              {running ? <span className="spk-spin" style={{ marginRight: 6, verticalAlign: '-2px' }} /> : null}
+              {running ? '执行中…' : `确认执行（${targetLabel}）`}
             </button>
-            <button className="spk-btn secondary" onClick={() => setConfirming(false)}>
+            <button className="spk-btn secondary" disabled={running} onClick={() => setConfirming(false)}>
               取消
             </button>
           </div>
         </div>
       ) : (
-        <button className="spk-btn primary" disabled={!selectedTool} onClick={() => setConfirming(true)}>
-          {isSwitch ? `切换为 ${targetLabel ?? '所选工具'}` : '开始初始化'}
-          {advancedSummary.length > 0 ? `（含 ${advancedSummary.length} 项高级选项）` : ''}
-        </button>
+        <div className="spk-row">
+          <button
+            className="spk-btn primary"
+            disabled={!selectedTool || running}
+            onClick={() => {
+              if (running) {
+                return;
+              }
+              setConfirming(true);
+            }}
+          >
+            {running ? <span className="spk-spin" style={{ marginRight: 6, verticalAlign: '-2px' }} /> : null}
+            {running
+              ? isSwitch
+                ? '切换进行中…'
+                : '初始化进行中…'
+              : (isSwitch ? `切换为 ${targetLabel ?? '所选工具'}` : '开始初始化') +
+                (advancedSummary.length > 0 ? `（含 ${advancedSummary.length} 项高级选项）` : '')}
+          </button>
+          {running ? (
+            <button className="spk-btn secondary" onClick={() => postToHost({ type: 'cancelOperation' })}>
+              取消操作
+            </button>
+          ) : null}
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,8 @@
+markitdown[pdf,docx,pptx,xlsx,xls]
+pdfplumber
+pypdfium2
+pypdf
+Pillow
+rapidocr-onnxruntime
+openpyxl
+pywin32

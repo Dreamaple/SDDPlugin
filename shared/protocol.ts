@@ -131,6 +131,22 @@ export interface Snapshot {
   clarifications: ClarificationItem[];
   nextStep: { stageId: StageId; token: string } | null;
   reviewPending: GateId | null;
+  /** 公共宪法目录（.specify/constitution）下的规则文件（工作区相对路径，协议增补字段） */
+  constitutionRules: string[];
+  /** 预处理输出文件（.specify/preprocess 下的 .md，工作区相对路径，协议增补字段） */
+  preprocessFiles: string[];
+  /** 预处理输出中已勾选作为 specify 输入的文件（与 preprocessFiles 求交后的有效选择） */
+  preprocessSelected: string[];
+  /** 澄清阶段已触发的轮数（多轮澄清支持，协议增补字段） */
+  clarifyRounds: number;
+  /** 低保真原型（specs/<dir>/prototype.html）；undefined = 未生成（协议增补字段） */
+  prototype?: { mtimeMs: number };
+  /** 高保真原型（specs/<dir>/prototype-hifi/index.html）；undefined = 未生成（协议增补字段） */
+  hifiPrototype?: { mtimeMs: number };
+  /** 高保真原型上次的输入配置（面板预填用，协议增补字段） */
+  hifiConfig?: { source: string; input: string; downloadAssets: boolean };
+  /** 是否已保存 MasterGo 认证令牌（面板提示用；令牌本体经 Secrets 存储不下发 webview） */
+  hifiTokenSaved?: boolean;
 }
 
 // ---------- 错误 ----------
@@ -174,6 +190,24 @@ export interface InitOptions {
   trustIntegration?: boolean;
 }
 
+// ---------- 项目配置（宪法占位 tag 预填，v0.6；字段目录可扩展） ----------
+
+/** 项目配置字段定义（内置目录可被 resources/project-fields.json 覆盖扩展） */
+export interface ProjectFieldDef {
+  /** 占位 tag id，如 PROJECT_NAME（对应宪法/规则中的 [PROJECT_NAME]） */
+  id: string;
+  /** 表单显示名 */
+  label: string;
+  /** 字段说明 */
+  description?: string;
+  /** 是否必填（仅表单提示，不阻塞保存） */
+  required?: boolean;
+  /** 输入框 placeholder */
+  placeholder?: string;
+  /** 缺省值策略（用户未填时由宿主计算，dispatch 时作为有效值传递） */
+  defaultFrom?: 'workspace-name' | 'app-name-upper' | 'app-name-pascal';
+}
+
 export type HostToWebview =
   | { type: 'stateUpdated'; snapshot: Snapshot }
   | { type: 'progressUpdated'; progress: Progress }
@@ -183,7 +217,19 @@ export type HostToWebview =
       stageId: StageId;
       outcome: 'dispatched' | 'fallback-clipboard' | 'failed';
       token: string;
-    };
+    }
+  | {
+      type: 'projectConfigLoaded';
+      fields: ProjectFieldDef[];
+      /** 用户已保存的配置值（可能包含目录之外的自定义字段） */
+      values: Record<string, string>;
+      /** 按 defaultFrom 策略计算的缺省值（留空时生效） */
+      defaults: Record<string, string>;
+      workspaceName: string;
+      /** 配置文件最后更新时间（前端以此感知重载） */
+      updatedAt?: string;
+    }
+  | { type: 'folderPicked'; path: string | undefined } // 文件夹选择器结果（高保真原型本地输入）
 
 export type WebviewToHost =
   | { type: 'ready' }
@@ -194,6 +240,26 @@ export type WebviewToHost =
   | { type: 'dispatchStage'; stageId: StageId }
   | { type: 'confirmReview'; gateId: GateId }
   | { type: 'answerClarification'; id: string; answer: string }
+  | { type: 'applyClarificationBatch'; answers: Array<{ id: string; answer: string }> } // 批量写回（由 Agent 整合进 spec）
+  | { type: 'exportClarifications' } // 导出待澄清项为 Markdown
+  | { type: 'generatePrototype' } // 派发低保真可交互原型生成指令（输出 specs/<dir>/prototype.html）
+  | { type: 'openPrototype' } // 在浏览器打开原型（未生成则报错提示）
+  | {
+      type: 'generateHiFiPrototype';
+      source: 'local' | 'svn' | 'mastergo' | 'mastergo-bridge' | 'playwright';
+      input: string;
+      downloadAssets: boolean;
+      authToken?: string;
+    } // 派发高保真 1:1 UI 还原指令（输出 specs/<dir>/prototype-hifi/）
+  | { type: 'openHiFiPrototype' } // 在浏览器打开高保真原型入口 index.html
+  | { type: 'pickHiFiFolder' } // 打开文件夹选择器（本地设计稿目录）
   | { type: 'cancelOperation' }
+  | { type: 'dismissResult' } // 清除终态横幅（宿主回推 idleProgress）
+  | { type: 'openConstitutionDir' } // 打开公共宪法目录（.specify/constitution），不存在则先创建
+  | { type: 'loadProjectConfig' } // 读取项目配置（宪法占位 tag 预填表）
+  | { type: 'saveProjectConfig'; values: Record<string, string> } // 保存项目配置
+  | { type: 'runPreprocess' } // 预处理：选目录 → dispatch markfiledown 技能（输出 .specify/preprocess）
+  | { type: 'setPreprocessSelection'; selected: string[] } // 勾选 specify 规范输入（必选）
+  | { type: 'openPreprocessDir' } // 打开预处理输出目录
   | { type: 'updateBundledSpeckit' } // v0.4.0：从 GitHub Release 刷新内置 Spec Kit 源码
   | { type: 'openLogs' };

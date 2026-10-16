@@ -1,0 +1,136 @@
+name: efm-multidoc-markdown-bundle
+description: All-in-one portable skill bundle for mixed PDF, Word, PowerPoint, and Excel inputs. PDF and PowerPoint are visual-first; Word and Excel are text-first with embedded-media OCR only.
+version: 2.2.0
+entrypoint: SKILL.md
+triggers:
+  - efm-multidoc.pipeline
+  - efm-multidoc-bundle
+  - evidence-first-multidoc
+  - multimodal-doc-batch
+  - pdf-agent-validation
+  - markdown-readback
+  - 多格式转markdown
+  - 多文档解析
+  - 证据先行多文档
+  - 图文还原
+  - 图表校验
+parameters:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    inputPath:
+      type: string
+      description: Path to a single input file or a directory containing mixed supported document formats.
+      examples:
+        - docs
+        - docs/source.docx
+    sourceFormat:
+      type: string
+      enum: [auto, pdf, doc, docx, ppt, pptx, xls, xlsx]
+      description: Optional format hint for filtering the accepted input types.
+      default: auto
+    outputRoot:
+      type: string
+      description: Output directory for the batch index and per-document result folders.
+      examples:
+        - output/efm-multidoc-batch
+    enablePdfAgentValidation:
+      type: boolean
+      description: Whether visual-first outputs such as PDF and PowerPoint must be checked by an agent after markdown generation.
+      default: true
+    markdownStyle:
+      type: string
+      enum: [technical, narrative, audit-friendly]
+      description: Markdown rendering style for the main content.
+      default: technical
+    includeAssetLinks:
+      type: boolean
+      description: Whether figures, tables, charts, and extracted assets should be linked in Markdown outputs.
+      default: true
+    enableOcr:
+      type: boolean
+      description: Whether OCR fallback should run for image-heavy visual pages and extracted embedded media.
+      default: true
+    recurse:
+      type: boolean
+      description: Whether directory input should be scanned recursively.
+      default: true
+    pythonExe:
+      type: string
+      description: Optional Python executable path when the target project uses a local virtual environment.
+  required:
+    - inputPath
+    - outputRoot
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    outputRoot:
+      type: string
+    indexPath:
+      type: string
+    batchManifestPath:
+      type: string
+    documentOutputRoots:
+      type: array
+      items:
+        type: string
+    perDocumentFinalPaths:
+      type: array
+      items:
+        type: string
+    sourcePath:
+      type: string
+    artifactsPagesPath:
+      type: string
+    embeddedMediaReportPath:
+      type: string
+    csvDirectoryPath:
+      type: string
+    blockCatalogPath:
+      type: string
+    blockAuditPath:
+      type: string
+    relationCandidatesPath:
+      type: string
+    markdownPath:
+      type: string
+    blockTracePath:
+      type: string
+    pdfAgentReviewReportPath:
+      type: string
+      description: Present for visual-first documents only.
+    integrityReportPath:
+      type: string
+    statePath:
+      type: string
+    rawBlockTotal:
+      type: integer
+    inMarkdownBlockTotal:
+      type: integer
+    unresolvedRelationCount:
+      type: integer
+    reviewRequiredPageCount:
+      type: integer
+dependencies:
+  skills: []
+examples:
+  - title: empty-project-mixed-doc-batch
+    input:
+      inputPath: docs
+      sourceFormat: auto
+      outputRoot: output/efm-multidoc-batch
+      enablePdfAgentValidation: true
+      markdownStyle: technical
+      includeAssetLinks: true
+      enableOcr: true
+      recurse: true
+      pythonExe: .venv/Scripts/python.exe
+    output:
+      outputRoot: output/efm-multidoc-batch
+      indexPath: output/efm-multidoc-batch/index.md
+      batchManifestPath: output/efm-multidoc-batch/batch-manifest.json
+      documentOutputRoots:
+        - output/efm-multidoc-batch/sample-a1b2c3d4
+      perDocumentFinalPaths:
+        - output/efm-multidoc-batch/sample-a1b2c3d4/final.md

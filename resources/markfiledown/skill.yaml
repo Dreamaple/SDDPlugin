@@ -1,0 +1,33 @@
+name: markfiledown-0509
+description: Convert PDF, DOCX, PPTX, XLSX to clean Markdown with format-based routing.
+version: 2.0.0
+entrypoint: SKILL.md
+triggers:
+  - markfiledown.pipeline
+  - markfiledown-0509
+  - 文档转markdown
+  - document to markdown
+parameters:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: object
+  properties:
+    inputPath:
+      type: string
+      description: Path to one input file or a directory.
+    inputFile:
+      type: array
+      items:
+        type: string
+      description: Explicit input files.
+    outputRoot:
+      type: string
+      description: Output directory for converted files.
+    recurse:
+      type: boolean
+      default: true
+  required:
+    - outputRoot
+  anyOf:
+    - required: [inputPath]
+    - required: [inputFile]
+  additionalProperties: false

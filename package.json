@@ -2,7 +2,7 @@
   "name": "speckit-gui",
   "displayName": "Speckit GUI",
   "description": "Spec Kit 可视化面板：图形化初始化、工具环境识别/切换、工作流引导、进度与澄清",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "speckit-gui",
   "private": true,
   "license": "MIT",

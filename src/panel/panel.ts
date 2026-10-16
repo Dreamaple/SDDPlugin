@@ -909,7 +909,13 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
     const transport = vscode.workspace
       .getConfiguration('speckitGui')
       .get<DispatchTransport>('dispatchTransport', 'chat-open');
-    const token = buildPrototypeGenerateToken(rel(specPath), rel(prototypePathFor(specPath)));
+    // v0.8.4 多文档输入：spec + 同目录 checklists/requirements.md（存在即纳入，Agent 端做需求合并）
+    const docs: string[] = [rel(specPath)];
+    const checklistPath = path.join(path.dirname(specPath), 'checklists', 'requirements.md');
+    if (fs.existsSync(checklistPath)) {
+      docs.push(rel(checklistPath));
+    }
+    const token = buildPrototypeGenerateToken(docs, rel(prototypePathFor(specPath)));
     const outcome = await dispatchToken(token, transport);
     if (outcome === 'failed') {
       await this.post({

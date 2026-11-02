@@ -56,6 +56,7 @@ function stagesOf(f: Fixture, overrides: Record<string, unknown> = {}): Workflow
       tasks: true,
       analyze: true,
       implement: true,
+      reverse: true,
     },
     lastTrigger: {},
     lastFailure: {},
@@ -198,6 +199,7 @@ describe('T032 工作流状态矩阵（SC-003）', () => {
         tasks: true,
         analyze: true,
         implement: true,
+        reverse: true,
       },
       lastTrigger: {},
       lastFailure: {},
@@ -213,5 +215,55 @@ describe('T032 工作流状态矩阵（SC-003）', () => {
     expect(availability.analyze).toBe(false);
     expect(availability.clarify).toBe(false);
     expect(availability.specify).toBe(true); // 非可选回退
+    expect(availability.reverse).toBe(true); // 逆向不依赖预置 skill，始终可派发
+  });
+
+  it('⑭ 逆向阶段并列：不抢正向 nextStep，产物 0/4 为未开始', () => {
+    const stages = stagesOf({});
+    const reverse = stages.find((s) => s.id === 'reverse');
+    expect(reverse).toBeDefined();
+    expect(reverse?.order).toBe(8);
+    expect(reverse?.label).toBe('逆向');
+    expect(reverse?.commandToken).toBe('/speckit.reverse');
+    expect(reverse?.state).toBe('not_started');
+    expect(reverse?.artifactProgress).toEqual({ done: 0, total: 4 });
+    expect(stages.filter((s) => s.id !== 'reverse').map((s) => s.id)).toEqual([
+      'constitution',
+      'specify',
+      'clarify',
+      'plan',
+      'tasks',
+      'analyze',
+      'implement',
+    ]);
+    expect(deriveNextStep(stages).nextStep?.stageId).toBe('constitution');
+  });
+
+  it('⑮ 逆向产物部分落盘 → in_progress，且不改变正向 nextStep', () => {
+    const stages = stagesOf({ constitutionReady: true, spec: true });
+    const reverse = stages.find((s) => s.id === 'reverse');
+    expect(reverse?.state).toBe('in_progress');
+    expect(reverse?.artifactProgress).toEqual({ done: 2, total: 4 });
+    expect(deriveNextStep(stages).nextStep?.stageId).toBe('specify');
+  });
+
+  it('⑯ 宪法+一份 spec+plan+tasks 齐备 → 逆向 completed，正向走完后 nextStep 仍为 null', () => {
+    const stages = stagesOf(
+      {
+        constitutionReady: true,
+        spec: true,
+        plan: true,
+        tasks: true,
+        taskStats: { done: 4, total: 4 },
+      },
+      { reviewConfirmations: { 'spec-review': 'x', 'plan-review': 'x' } },
+    );
+    expect(stages.find((s) => s.id === 'reverse')?.state).toBe('completed');
+    expect(deriveNextStep(stages).nextStep).toBeNull();
+  });
+
+  it('⑰ 逆向令牌：skills /speckit-reverse，命令模式 /speckit.reverse', () => {
+    expect(deriveCommandToken('reverse', true)).toBe('/speckit-reverse');
+    expect(deriveCommandToken('reverse', false)).toBe('/speckit.reverse');
   });
 });

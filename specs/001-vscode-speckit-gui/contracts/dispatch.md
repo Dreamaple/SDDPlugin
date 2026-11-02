@@ -13,6 +13,9 @@
 | tasks | tasks | `/speckit-tasks` | `/speckit.tasks` |
 | analyze | analyze | `/speckit-analyze` | `/speckit.analyze` |
 | implement | implement | `/speckit-implement` | `/speckit.implement` |
+| reverse | reverse | `/speckit-reverse` | `/speckit.reverse` |
+
+`reverse` 与正向阶段并列，不占用「下一步」指针。令牌后附加提示词：所选目录（工作区根或用户指定的一个目录）只生成一份 `spec.md`，禁止按模块拆分，禁止 root index spec + 每模块一份 spec。产物仍落在 `.specify/memory/constitution.md` 与当前特性目录的 `spec.md` / `plan.md` / `tasks.md`。
 
 令牌模式判定：`.specify/init-options.json` 的 `ai_skills === true` → skills 令牌；否则命令模式令牌。未初始化工作区无令牌可发（按钮禁用）。
 

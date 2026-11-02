@@ -3,6 +3,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { dispatchToken } from '../../src/dispatch/transports';
 import { tokenForStage } from '../../src/dispatch/dispatcher';
+import { buildReversePromptSuffix } from '../../src/core/reverse';
 import {
   getRecordedCommands,
   resetStubs,
@@ -47,6 +48,23 @@ describe('T039 dispatch × transports（US2 集成）', () => {
       '/speckit.analyze',
       '/speckit.implement',
     ]);
+    expect(tokenForStage('reverse', true)).toBe('/speckit-reverse');
+    expect(tokenForStage('reverse', false)).toBe('/speckit.reverse');
+  });
+
+  it('逆向令牌走同一 chat-open 传输，并带上「一个目录一份 spec」约束', async () => {
+    const token = `${tokenForStage('reverse', false)} ${buildReversePromptSuffix({
+      mode: 'directory',
+      path: 'src/pkg',
+    })}`;
+    const outcome = await dispatchToken(token, 'chat-open');
+    expect(outcome).toBe('dispatched');
+    const calls = getRecordedCommands().filter((c) => c.command === 'workbench.action.chat.open');
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0].args[0]).startsWith('/speckit.reverse ')).toBe(true);
+    expect(String(calls[0].args[0])).toContain('选定目录「src/pkg」');
+    expect(String(calls[0].args[0])).toContain('只生成一份 spec.md');
+    expect(String(calls[0].args[0])).toContain('禁止按模块、包或子目录拆成多份 spec');
   });
 
   it('Transport A chat-open → dispatched + 聊天命令被预填令牌（场景 2c）', async () => {

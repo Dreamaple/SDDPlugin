@@ -189,6 +189,7 @@ export function App() {
               hifi={snapshot.hifiPrototype}
               hifiConfig={snapshot.hifiConfig}
               tokenSaved={snapshot.hifiTokenSaved}
+              reverseTarget={snapshot.reverseTarget}
             />
           ) : (
             <ClarifyView

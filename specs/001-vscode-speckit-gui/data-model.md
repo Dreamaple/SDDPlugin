@@ -64,7 +64,7 @@
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | `string` | `constitution \| specify \| clarify \| plan \| tasks \| analyze \| implement` |
+| `id` | `string` | `constitution \| specify \| clarify \| plan \| tasks \| analyze \| implement \| reverse`（`reverse` 并列，不进入 nextStep） |
 | `order` | `number` | 展示顺序（1..7） |
 | `optional` | `boolean` | analyze/clarify 为可选（命令缺失或产物条件不适用时降级显示） |
 | `commandToken` | `string` | 调用令牌：skills 模式 `/speckit-<name>`，命令模式 `/speckit.<name>` |

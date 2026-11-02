@@ -6,6 +6,7 @@ Spec Kit 的可视化面板：全程图形界面完成 SDD（Spec-Driven Develop
 
 - **环境检测与初始化向导**（US1）：自动识别项目 `.specify` 环境状态（未初始化/不完整/就绪）与已配置的 AI 工具；图形向导选择工具与脚本类型后复用官方 `specify` CLI 执行初始化；支持二次确认后切换工具环境（`specify integration install`）
 - **工作流全景与下一步引导**（US2）：constitution → specify → clarify → plan → tasks → analyze → implement 阶段时间线，状态由磁盘产物推导；醒目「下一步」按钮触发对应 speckit 命令（聊天预填/剪贴板回退）；内置 spec/plan 人工评审关卡
+- **逆向生成（代码 → 规格）**：侧边栏「逆向」卡片与正向阶段并列，不替换正向流程。范围是当前工作区根目录，或在「指定目录」模式下选中的一个目录。按钮派发 `/speckit.reverse`（skills 模式为 `/speckit-reverse`），由本地 AI 代理阅读该目录代码，写入与正向流程相同的本地产物（`.specify/memory/constitution.md`，以及当前特性目录下的一份 `spec.md`、`plan.md`、`tasks.md`）。每个选定目录只生成一份规格，不按模块拆分，也不做根索引规格加每模块一份规格；跨模块依赖写在这一份 spec 里。插件本身不生成规格正文，也不调用云服务
 - **进度可视化**（US3）：CLI 长操作逐行进度流 + 可取消（进程树终止）；任务阶段 N/M 复选框统计
 - **澄清可视化**（US4）：解析 spec 中 `[NEEDS CLARIFICATION: …]` 标记为交互问题卡片（含建议选项表），点选或自定义答案后单事务写回 spec 并确保零残留
 
@@ -52,6 +53,6 @@ F5 调试：启动 Extension Development Host（`.vscode/launch.json`），点�
 ## 已知边界（v1）
 
 - 仅支持单根工作区（multi-root 拒绝并提示）
-- 插件不重新实现 spec/plan/tasks 生成逻辑——按钮触发命令，由 AI 代理执行实际生成
+- 插件不重新实现 spec/plan/tasks 生成逻辑——正向与逆向按钮都只触发命令，由本地 AI 代理写入 `.specify` / `specs/` 产物
 - 工具目录为静态快照（来自 `INTEGRATION_REGISTRY`），未知集成显示为「未知/自定义环境」
 - Windows 下 `.cmd` 形式的 CLI 经 `cmd.exe /d /s /c` 包装执行（参数均来自受控常量，无注入面）

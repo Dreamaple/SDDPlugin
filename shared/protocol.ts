@@ -50,7 +50,16 @@ export type StageId =
   | 'plan'
   | 'tasks'
   | 'analyze'
-  | 'implement';
+  | 'implement'
+  /** 代码 → 规格。与正向阶段并列，不替代正向 nextStep。 */
+  | 'reverse';
+
+/** 逆向生成的代码范围：整个工作区，或用户指定的一个目录（该目录只对应一份 spec）。 */
+export interface ReverseTarget {
+  mode: 'workspace' | 'directory';
+  /** 工作区相对路径。workspace 模式为空串。 */
+  path: string;
+}
 
 export type StageState = 'not_started' | 'in_progress' | 'completed' | 'blocked_review' | 'error';
 export type GateId = 'spec-review' | 'plan-review';
@@ -68,6 +77,8 @@ export interface WorkflowStage {
   gate?: GateId;
   /** tasks/implement 阶段的复选框统计 */
   taskStats?: { done: number; total: number };
+  /** reverse 阶段：宪法 / spec / plan / tasks 已落盘数量（所选目录仍只对应一份 spec） */
+  artifactProgress?: { done: number; total: number };
 }
 
 export interface ClarificationOption {
@@ -147,6 +158,8 @@ export interface Snapshot {
   hifiConfig?: { source: string; input: string; downloadAssets: boolean };
   /** 是否已保存 MasterGo 认证令牌（面板提示用；令牌本体经 Secrets 存储不下发 webview） */
   hifiTokenSaved?: boolean;
+  /** 逆向生成的目标目录（工作区根，或指定的一个目录） */
+  reverseTarget: ReverseTarget;
 }
 
 // ---------- 错误 ----------
@@ -230,6 +243,7 @@ export type HostToWebview =
       updatedAt?: string;
     }
   | { type: 'folderPicked'; path: string | undefined } // 文件夹选择器结果（高保真原型本地输入）
+  | { type: 'reverseFolderPicked'; path: string | undefined } // 逆向生成目录选择结果（工作区相对路径；取消为 undefined）
 
 export type WebviewToHost =
   | { type: 'ready' }
@@ -238,6 +252,8 @@ export type WebviewToHost =
   | { type: 'switchIntegration'; integrationId: string; force: boolean }
   | { type: 'selectFeature'; dirName: string }
   | { type: 'dispatchStage'; stageId: StageId }
+  | { type: 'setReverseTarget'; mode: 'workspace' | 'directory'; path: string } // 逆向范围：工作区根或一个指定目录
+  | { type: 'pickReverseDirectory' } // 打开目录选择器（所选目录只生成一份规格）
   | { type: 'confirmReview'; gateId: GateId }
   | { type: 'answerClarification'; id: string; answer: string }
   | { type: 'applyClarificationBatch'; answers: Array<{ id: string; answer: string }> } // 批量写回（由 Agent 整合进 spec）

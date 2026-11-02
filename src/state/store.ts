@@ -1,6 +1,6 @@
 // T016: workspaceState 最小 UI 状态（data-model.md §7：仅三键）
 import * as vscode from 'vscode';
-import type { GateId, StageId } from '../../shared/protocol';
+import type { GateId, ReverseTarget, StageId } from '../../shared/protocol';
 
 const KEY_ACTIVE_FEATURE = 'speckitGui.activeFeatureDir';
 const KEY_REVIEW_CONFIRMATIONS = 'speckitGui.reviewConfirmations';
@@ -8,6 +8,7 @@ const KEY_LAST_STAGE_TRIGGER = 'speckitGui.lastStageTrigger';
 const KEY_PREPROCESS_SELECTION = 'speckitGui.preprocessSelection';
 const KEY_CLARIFY_ROUNDS = 'speckitGui.clarifyRounds';
 const KEY_HIFI_CONFIG = 'speckitGui.hifiPrototypeConfig';
+const KEY_REVERSE_TARGET = 'speckitGui.reverseTarget';
 
 export class UiStateStore {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -76,6 +77,18 @@ export class UiStateStore {
 
   setHiFiConfig(config: { source: string; input: string; downloadAssets: boolean }): void {
     void this.context.workspaceState.update(KEY_HIFI_CONFIG, config);
+  }
+
+  /** 逆向生成范围（工作区根或一个指定目录；该目录只对应一份 spec） */
+  getReverseTarget(): ReverseTarget {
+    return this.context.workspaceState.get<ReverseTarget>(KEY_REVERSE_TARGET, {
+      mode: 'workspace',
+      path: '',
+    });
+  }
+
+  setReverseTarget(target: ReverseTarget): void {
+    void this.context.workspaceState.update(KEY_REVERSE_TARGET, target);
   }
 
   /** MasterGo 个人认证令牌（Secrets 加密存储；不进快照/聊天记录） */

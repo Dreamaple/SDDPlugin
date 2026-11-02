@@ -2,7 +2,7 @@
 // 确认交互使用面板内联确认卡（VSCode webview 禁用 window.confirm/alert，原生弹窗不可用）
 import { useEffect, useState } from 'react';
 import { postToHost, onHostMessage } from '../vscode';
-import type { GateId, StageId, StageState, WorkflowStage } from '../../../shared/protocol';
+import type { GateId, ReverseTarget, StageId, StageState, WorkflowStage } from '../../../shared/protocol';
 
 const STATE_LABELS: Record<StageState, string> = {
   not_started: '未开始',
@@ -365,6 +365,105 @@ function HiFiPrototypeCard(props: {
   );
 }
 
+/** 逆向生成：与正向阶段并列。所选目录（工作区根或指定目录）只生成一份 spec。 */
+function ReverseCard(props: { stage: WorkflowStage; target: ReverseTarget }) {
+  const { stage, target } = props;
+  const [mode, setMode] = useState<ReverseTarget['mode']>(target.mode);
+  const [dirPath, setDirPath] = useState(target.path);
+
+  useEffect(() => {
+    setMode(target.mode);
+    setDirPath(target.path);
+  }, [target.mode, target.path]);
+
+  useEffect(() => {
+    return onHostMessage((msg) => {
+      if (msg.type === 'reverseFolderPicked' && msg.path !== undefined) {
+        setMode(msg.path ? 'directory' : 'workspace');
+        setDirPath(msg.path);
+      }
+    });
+  }, []);
+
+  const chooseMode = (next: ReverseTarget['mode']) => {
+    setMode(next);
+    postToHost({
+      type: 'setReverseTarget',
+      mode: next,
+      path: next === 'directory' ? dirPath : '',
+    });
+  };
+
+  const progress = stage.artifactProgress;
+
+  return (
+    <div className="spk-card">
+      <div className="spk-row" style={{ marginTop: 0 }}>
+        <strong>逆向生成（反推规格）</strong>
+        <StateChip state={stage.state} />
+        {progress ? (
+          <span className="spk-chip">
+            产物 {progress.done}/{progress.total}
+          </span>
+        ) : null}
+        <span style={{ flex: 1 }} />
+        <button
+          className="spk-btn primary"
+          disabled={!stage.available}
+          onClick={() => postToHost({ type: 'dispatchStage', stageId: 'reverse' })}
+          title={`触发 ${stage.commandToken}。所选目录只生成一份规格，由本地 AI 写入 .specify 产物`}
+        >
+          {stage.state === 'completed' ? '重新反推' : '反推规格'}：运行 {stage.commandToken}
+        </button>
+      </div>
+      <div className="spk-implication">
+        阅读所选目录里的现有代码，反推为一份 Spec Kit 规格（constitution / 一份 spec.md / plan / tasks），
+        写入本地 .specify 与当前特性目录。每个选定目录只生成一份 spec，不按模块拆分，也不做根索引规格加每模块规格。
+        跨模块依赖写在这一份 spec 里。生成仍由本地 AI 代理完成，插件只派发命令。
+      </div>
+      <div className="spk-row" style={{ flexWrap: 'wrap' }}>
+        <label className="spk-row" style={{ margin: 0, flex: 'none' }}>
+          <input
+            type="radio"
+            name="spk-reverse-scope"
+            checked={mode === 'workspace'}
+            onChange={() => chooseMode('workspace')}
+          />
+          当前工作区
+        </label>
+        <label className="spk-row" style={{ margin: 0, flex: 'none' }}>
+          <input
+            type="radio"
+            name="spk-reverse-scope"
+            checked={mode === 'directory'}
+            onChange={() => chooseMode('directory')}
+          />
+          指定目录
+        </label>
+        {mode === 'directory' ? (
+          <>
+            <input
+              className="spk-input"
+              style={{ flex: 1, minWidth: 160 }}
+              placeholder="工作区相对路径，例如 src/pkg"
+              value={dirPath}
+              onChange={(e) => setDirPath(e.target.value)}
+              onBlur={() => postToHost({ type: 'setReverseTarget', mode: 'directory', path: dirPath })}
+            />
+            <button
+              className="spk-btn secondary"
+              style={{ flex: 'none' }}
+              onClick={() => postToHost({ type: 'pickReverseDirectory' })}
+            >
+              浏览…
+            </button>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function WorkflowView(props: {
   stages: WorkflowStage[];
   nextStep: { stageId: StageId; token: string } | null;
@@ -377,6 +476,7 @@ export function WorkflowView(props: {
   hifi?: { mtimeMs: number } | undefined;
   hifiConfig?: { source: string; input: string; downloadAssets: boolean } | undefined;
   tokenSaved?: boolean;
+  reverseTarget?: ReverseTarget;
 }) {
   const {
     stages,
@@ -390,7 +490,10 @@ export function WorkflowView(props: {
     hifi,
     hifiConfig,
     tokenSaved,
+    reverseTarget,
   } = props;
+  const reverseStage = stages.find((s) => s.id === 'reverse');
+  const forwardStages = stages.filter((s) => s.id !== 'reverse');
   // 面板内联确认：待确认的阶段 id（同一时刻至多一个；确认卡展示于对应行下方）
   const [pendingConfirm, setPendingConfirm] = useState<StageId | undefined>(undefined);
   const constitutionStage = stages.find((s) => s.id === 'constitution');
@@ -414,8 +517,14 @@ export function WorkflowView(props: {
         tokenSaved={tokenSaved}
         planReady={stages.find((s) => s.id === 'plan')?.state === 'completed'}
       />
+      {reverseStage ? (
+        <ReverseCard
+          stage={reverseStage}
+          target={reverseTarget ?? { mode: 'workspace', path: '' }}
+        />
+      ) : null}
       <ul className="spk-steps">
-        {stages.map((stage) => {
+        {forwardStages.map((stage) => {
           const isCurrent = nextStep?.stageId === stage.id;
           const canDispatch =
             isCurrent &&

@@ -74,6 +74,13 @@ import type { UiStateStore } from '../state/store';
 import { InitRunner } from '../init/initRunner';
 import { dispatchToken, type DispatchTransport } from '../dispatch/transports';
 import { WorkspaceWatcher } from './watcher';
+import {
+  buildReversePromptSuffix,
+  normalizeReverseTarget,
+  parseReverseTargetInput,
+  toWorkspaceRelativeDir,
+  workspaceReverseTarget,
+} from '../core/reverse';
 
 interface ProviderDeps {
   rootUri: vscode.Uri | undefined;
@@ -334,6 +341,9 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
       hifiTokenSaved: multiRootBlocked
         ? false
         : (await this.deps.store.getMastergoToken()) !== undefined,
+      reverseTarget: multiRootBlocked
+        ? workspaceReverseTarget()
+        : normalizeReverseTarget(root, this.deps.store.getReverseTarget()),
     };
   }
 
@@ -382,6 +392,12 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'dispatchStage':
         await this.handleDispatch(msg.stageId);
+        break;
+      case 'setReverseTarget':
+        await this.handleSetReverseTarget(msg.mode, msg.path);
+        break;
+      case 'pickReverseDirectory':
+        await this.handlePickReverseDirectory();
         break;
       case 'confirmReview':
         this.deps.store.confirmReview(msg.gateId as GateId);
@@ -531,6 +547,22 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
       if (suffix) {
         token = `${token} ${suffix}`;
       }
+    }
+    if (stageId === 'reverse') {
+      const target = normalizeReverseTarget(this.deps.rootUri.fsPath, this.deps.store.getReverseTarget());
+      if (target.mode === 'directory' && !target.path) {
+        await this.post({
+          type: 'errorRaised',
+          error: {
+            code: 'io-error',
+            message: '「逆向」需要先选择一个目录',
+            suggestion: '在逆向卡片中点「浏览」选择工作区内的目录；该目录只会生成一份规格',
+            canRetry: false,
+          },
+        });
+        return;
+      }
+      token = `${token} ${buildReversePromptSuffix(target)}`;
     }
     if (stageId === 'specify') {
       const selected = normalizeSelection(
@@ -1080,6 +1112,65 @@ export class SpeckitPanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     await vscode.env.openExternal(vscode.Uri.file(indexHtml));
+  }
+
+  private async handleSetReverseTarget(
+    mode: 'workspace' | 'directory',
+    pathInput: string,
+  ): Promise<void> {
+    const root = this.deps.rootUri?.fsPath;
+    if (!root) {
+      await this.postWorkspaceMissing();
+      return;
+    }
+    const parsed = parseReverseTargetInput(root, mode, pathInput ?? '');
+    if (!parsed.ok) {
+      await this.post({
+        type: 'errorRaised',
+        error: { code: 'io-error', message: parsed.message, canRetry: false },
+      });
+      return;
+    }
+    this.deps.store.setReverseTarget(parsed.target);
+    await this.refresh();
+  }
+
+  /** 选定一个工作区内目录作为逆向单元：整个目录只生成一份 spec，不按模块拆分。 */
+  private async handlePickReverseDirectory(): Promise<void> {
+    const root = this.deps.rootUri?.fsPath;
+    if (!root) {
+      await this.postWorkspaceMissing();
+      return;
+    }
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      defaultUri: vscode.Uri.file(root),
+      openLabel: '选择要反推的目录',
+      title: '逆向生成：选择一个目录（整个目录只生成一份规格）',
+    });
+    if (!picked || picked.length === 0) {
+      await this.post({ type: 'reverseFolderPicked', path: undefined });
+      return;
+    }
+    const rel = toWorkspaceRelativeDir(root, picked[0].fsPath);
+    if (rel === undefined) {
+      await this.post({
+        type: 'errorRaised',
+        error: {
+          code: 'io-error',
+          message: '请选择当前工作区内的目录',
+          suggestion: '规格写入本工作区的 .specify 与 specs/，不能反推工作区外的代码',
+          canRetry: false,
+        },
+      });
+      return;
+    }
+    const target = rel === '' ? workspaceReverseTarget() : { mode: 'directory' as const, path: rel };
+    this.deps.store.setReverseTarget(target);
+    await this.post({ type: 'reverseFolderPicked', path: target.path });
+    await this.refresh();
   }
 
   private async handlePickHiFiFolder(): Promise<void> {

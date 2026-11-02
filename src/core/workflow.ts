@@ -27,6 +27,7 @@ const STAGE_LABELS: Record<StageId, string> = {
   tasks: '任务',
   analyze: '分析',
   implement: '实现',
+  reverse: '逆向',
 };
 
 /** analyze/clarify 为可选阶段；命令不可用时禁用按钮（不隐藏行） */
@@ -100,6 +101,8 @@ export function detectStageAvailability(
     // 非可选阶段探测失败 → 回退可用（contracts 允许：探测仅影响 optional 降级）
     result[stage] = detected || !optional;
   }
+  // 逆向与正向并列：不依赖预置 skill 文件，令牌 + 提示词后缀即可派发给本地 Agent
+  result.reverse = true;
   return result;
 }
 
@@ -201,7 +204,47 @@ export function buildStages(input: BuildStagesInput): WorkflowStage[] {
     return base;
   });
 
+  stages.push(buildReverseStage(input, stages.length + 1, specExists, planExists, tasksExists));
   return stages;
+}
+
+/**
+ * 逆向阶段与正向时间线并列，不进入 deriveNextStep。
+ * 完成判定与正向产物一致：宪法 + 一份 spec.md + plan.md + 非空 tasks.md。
+ * 所选目录只对应这一份 spec，不按模块另计产物。
+ */
+function buildReverseStage(
+  input: BuildStagesInput,
+  order: number,
+  specExists: boolean,
+  planExists: boolean,
+  tasksExists: boolean,
+): WorkflowStage {
+  const { taskStats } = input;
+  const aiSkills = input.env.aiSkills === true;
+  const checks = [
+    input.constitutionReady,
+    specExists,
+    planExists,
+    tasksExists && (taskStats?.total ?? 0) > 0,
+  ];
+  const done = checks.filter(Boolean).length;
+  const completed = done === checks.length;
+  const stage: WorkflowStage = {
+    id: 'reverse',
+    order,
+    label: STAGE_LABELS.reverse,
+    optional: false,
+    commandToken: deriveCommandToken('reverse', aiSkills),
+    available: input.availableCommands.reverse ?? true,
+    state: 'not_started',
+    artifactProgress: { done, total: checks.length },
+  };
+  stage.state = deriveState('reverse', input, completed);
+  if (!completed && done > 0 && stage.state === 'not_started') {
+    stage.state = 'in_progress';
+  }
+  return stage;
 }
 
 /** 当前建议阶段：第一个非 completed 的阶段；若为 blocked_review → reviewPending 为其关卡 */
@@ -210,6 +253,9 @@ export function deriveNextStep(stages: WorkflowStage[]): {
   reviewPending: GateId | null;
 } {
   for (const stage of stages) {
+    if (stage.id === 'reverse') {
+      continue;
+    }
     if (stage.state !== 'completed') {
       return {
         nextStep: { stageId: stage.id, token: stage.commandToken },
